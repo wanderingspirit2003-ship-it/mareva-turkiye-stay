@@ -229,7 +229,7 @@ const translations = {
     eyebrow: "Независимый поиск по Турции", heroA: "Турция.", heroB: "Без переплаты.",
     heroCopy: "Собираем предложения отелей, апарт-отелей и вилл и показываем только те, где тот же отдых стоит дешевле официальной цены.", heroPromise: "Экономим ваши деньги. Качество отдыха неизменно.",
     where: "Куда", checkIn: "Заезд", checkOut: "Выезд", guests: "Гости", find: "Найти", searching: "Ищем…", popular: "Популярно:",
-    selectDates: "Выберите даты", chooseArrival: "Сначала выберите дату заезда", chooseDeparture: "Теперь выберите дату выезда", close: "Готово",
+    selectDates: "Выберите даты", chooseArrival: "Сначала выберите дату заезда", chooseDeparture: "Теперь выберите дату выезда", close: "Готово", year: "Год", previousMonth: "Предыдущий месяц", nextMonth: "Следующий месяц",
     benefits: [["Цена со скидкой", "Ниже официальной на те же даты"], ["Один объект — одна карточка", "Без дублей в выдаче"], ["Прямой переход", "Бронирование у источника"], ["Только экономия", "Полные цены не показываем"]],
     picked: "Подобрали для вас", allTurkey: "Отдых по всей Турции", housing: "Отдых", variants: "вариантов в прототипе", filters: "Фильтры", reset: "Сбросить",
     sort: "Сортировка", sortDeal: "Выгодные сначала", sortCheap: "Сначала дешевле", sortRating: "По рейтингу", type: "Тип жилья", category: "Категория", all: "Все",
@@ -248,7 +248,7 @@ const translations = {
     eyebrow: "Independent search across Turkey", heroA: "Turkey.", heroB: "Without overpaying.",
     heroCopy: "We find live deals below the official price. You save money while the quality of your holiday stays the same.", heroPromise: "Save money. Not memories.",
     where: "Where", checkIn: "Check-in", checkOut: "Check-out", guests: "Guests", find: "Search", searching: "Searching…", popular: "Popular:",
-    selectDates: "Select dates", chooseArrival: "Choose your check-in date first", chooseDeparture: "Now choose your check-out date", close: "Done",
+    selectDates: "Select dates", chooseArrival: "Choose your check-in date first", chooseDeparture: "Now choose your check-out date", close: "Done", year: "Year", previousMonth: "Previous month", nextMonth: "Next month",
     benefits: [["Discounted price", "Below the official price for the same dates"], ["One property, one card", "No duplicates"], ["Direct handoff", "Book with the source"], ["Savings only", "Full-price stays are hidden"]],
     picked: "Selected for you", allTurkey: "Stays across Turkey", housing: "Stays", variants: "prototype options", filters: "Filters", reset: "Reset",
     sort: "Sort", sortDeal: "Best deals first", sortCheap: "Lowest price", sortRating: "Highest rating", type: "Property type", category: "Category", all: "All",
@@ -267,7 +267,7 @@ const translations = {
     eyebrow: "Türkiye genelinde bağımsız arama", heroA: "Türkiye.", heroB: "Fazla ödemeden.",
     heroCopy: "Resmi fiyattan daha düşük güncel fırsatları buluruz. Siz tasarruf ederken tatil kalitesi değişmez.", heroPromise: "Paradan tasarruf edin. Anılardan değil.",
     where: "Nereye", checkIn: "Giriş", checkOut: "Çıkış", guests: "Misafir", find: "Ara", searching: "Aranıyor…", popular: "Popüler:",
-    selectDates: "Tarihleri seçin", chooseArrival: "Önce giriş tarihini seçin", chooseDeparture: "Şimdi çıkış tarihini seçin", close: "Tamam",
+    selectDates: "Tarihleri seçin", chooseArrival: "Önce giriş tarihini seçin", chooseDeparture: "Şimdi çıkış tarihini seçin", close: "Tamam", year: "Yıl", previousMonth: "Önceki ay", nextMonth: "Sonraki ay",
     benefits: [["İndirimli fiyat", "Aynı tarihlerde resmi fiyattan düşük"], ["Bir tesis, bir kart", "Tekrarsız sonuçlar"], ["Doğrudan yönlendirme", "Kaynakta rezervasyon"], ["Yalnızca tasarruf", "Tam fiyatlı tesisler gizlenir"]],
     picked: "Sizin için seçtik", allTurkey: "Türkiye genelinde konaklama", housing: "Konaklama", variants: "prototip seçeneği", filters: "Filtreler", reset: "Sıfırla",
     sort: "Sıralama", sortDeal: "En iyi fırsatlar", sortCheap: "En düşük fiyat", sortRating: "En yüksek puan", type: "Konaklama türü", category: "Kategori", all: "Tümü",
@@ -324,7 +324,7 @@ function CalendarMonth({ month, language, checkIn, checkOut, onPick }: { month: 
     return day > 0 && day <= daysCount ? new Date(year, monthIndex, day) : null;
   });
   const weekdayBase = new Date(2026, 7, 10);
-  const weekdays = Array.from({ length: 7 }, (_, index) => new Intl.DateTimeFormat(locale, { weekday: "short" }).format(new Date(weekdayBase.getFullYear(), weekdayBase.getMonth(), weekdayBase.getDate() + index)));
+  const weekdays = Array.from({ length: 7 }, (_, index) => new Intl.DateTimeFormat(locale, { weekday: "long" }).format(new Date(weekdayBase.getFullYear(), weekdayBase.getMonth(), weekdayBase.getDate() + index)));
   const start = parseIso(checkIn).getTime();
   const end = parseIso(checkOut).getTime();
   return (
@@ -333,7 +333,7 @@ function CalendarMonth({ month, language, checkIn, checkOut, onPick }: { month: 
       <div className="weekdays">{weekdays.map((day) => <span key={day}>{day}</span>)}</div>
       <div className="days-grid">
         {cells.map((date, index) => date ? (
-          <button key={toIso(date)} type="button" className={`${date.getTime() === start || date.getTime() === end ? "selected" : ""} ${date.getTime() > start && date.getTime() < end ? "in-range" : ""}`} onClick={() => onPick(date)}>{date.getDate()}</button>
+          <button key={toIso(date)} type="button" aria-label={new Intl.DateTimeFormat(locale, { weekday: "long", day: "numeric", month: "long", year: "numeric" }).format(date)} aria-pressed={date.getTime() === start || date.getTime() === end} className={`${date.getTime() === start || date.getTime() === end ? "selected" : ""} ${date.getTime() > start && date.getTime() < end ? "in-range" : ""}`} onClick={() => onPick(date)}>{date.getDate()}</button>
         ) : <span key={`blank-${index}`} />)}
       </div>
     </div>
@@ -492,6 +492,14 @@ export default function Home() {
     return new Intl.DateTimeFormat(locale, { day: "numeric", month: "long" }).format(parseIso(value));
   }
 
+  const calendarMonths = useMemo(() => Array.from({ length: 12 }, (_, month) => new Intl.DateTimeFormat(locale, { month: "long" }).format(new Date(calendarMonth.getFullYear(), month, 1))), [calendarMonth, locale]);
+
+  function moveCalendar(direction: -1 | 1) {
+    const next = new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() + direction, 1);
+    if (next.getFullYear() < 2026 || next.getFullYear() > 2027) return;
+    setCalendarMonth(next);
+  }
+
   function selectDate(value: Date) {
     if (datePicker === "checkIn") {
       setCheckIn(toIso(value));
@@ -590,18 +598,47 @@ export default function Home() {
           <label className="search-field">
             <span>{t.guests}</span>
             <select value={guests} onChange={(event) => setGuests(Number(event.target.value))}>
-              {language === "ru" ? <><option value={1}>1 гость</option><option value={2}>2 гостя</option><option value={3}>3 гостя</option><option value={4}>4 гостя</option><option value={5}>5 гостей</option></> : [1,2,3,4,5].map((item) => <option value={item} key={item}>{item} {language === "tr" ? "misafir" : item === 1 ? "guest" : "guests"}</option>)}
+              {Array.from({ length: 10 }, (_, index) => index + 1).map((item) => (
+                <option value={item} key={item}>
+                  {item} {language === "tr" ? "misafir" : language === "en" ? (item === 1 ? "guest" : "guests") : item === 1 ? "гость" : item < 5 ? "гостя" : "гостей"}
+                </option>
+              ))}
             </select>
           </label>
           <button className="search-button" onClick={runSearch} disabled={searching}>
             {searching ? t.searching : t.find}<span aria-hidden="true">→</span>
           </button>
         </div>
-        {datePicker && <div className="calendar-popover" role="dialog" aria-label={t.selectDates}>
-          <div className="calendar-head"><div><strong>{t.selectDates}</strong><span>{datePicker === "checkIn" ? t.chooseArrival : t.chooseDeparture}</span></div><div className="calendar-nav"><button type="button" onClick={() => setCalendarMonth(new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() - 1, 1))}>←</button><button type="button" onClick={() => setCalendarMonth(new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() + 1, 1))}>→</button><button type="button" className="calendar-done" onClick={() => setDatePicker(null)}>{t.close}</button></div></div>
-          <div className="calendar-grid"><CalendarMonth month={calendarMonth} language={language} checkIn={checkIn} checkOut={checkOut} onPick={selectDate} /><CalendarMonth month={new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() + 1, 1)} language={language} checkIn={checkIn} checkOut={checkOut} onPick={selectDate} /></div>
-        </div>}
         </div>
+        {datePicker && <div className="calendar-overlay" role="presentation" onMouseDown={(event) => { if (event.currentTarget === event.target) setDatePicker(null); }}>
+          <div className="calendar-modal" role="dialog" aria-modal="true" aria-label={t.selectDates}>
+            <div className="calendar-head">
+              <div className="calendar-title"><strong>{t.selectDates}</strong><span>{datePicker === "checkIn" ? t.chooseArrival : t.chooseDeparture}</span></div>
+              <button type="button" className="calendar-close" aria-label={t.close} onClick={() => setDatePicker(null)}>×</button>
+            </div>
+
+            <div className="calendar-date-tabs" role="tablist" aria-label={t.selectDates}>
+              <button type="button" role="tab" aria-selected={datePicker === "checkIn"} className={datePicker === "checkIn" ? "active" : ""} onClick={() => { setDatePicker("checkIn"); setCalendarMonth(new Date(parseIso(checkIn).getFullYear(), parseIso(checkIn).getMonth(), 1)); }}><span>{t.checkIn}</span><strong>{displayDate(checkIn)}</strong></button>
+              <button type="button" role="tab" aria-selected={datePicker === "checkOut"} className={datePicker === "checkOut" ? "active" : ""} onClick={() => { setDatePicker("checkOut"); setCalendarMonth(new Date(parseIso(checkOut).getFullYear(), parseIso(checkOut).getMonth(), 1)); }}><span>{t.checkOut}</span><strong>{displayDate(checkOut)}</strong></button>
+            </div>
+
+            <div className="calendar-year-row">
+              <span>{t.year}</span>
+              {[2026, 2027].map((year) => <button type="button" key={year} className={calendarMonth.getFullYear() === year ? "active" : ""} onClick={() => setCalendarMonth(new Date(year, calendarMonth.getMonth(), 1))}>{year}</button>)}
+            </div>
+
+            <div className="calendar-month-rail" aria-label={t.selectDates}>
+              {calendarMonths.map((month, index) => <button type="button" key={month} className={calendarMonth.getMonth() === index ? "active" : ""} onClick={() => setCalendarMonth(new Date(calendarMonth.getFullYear(), index, 1))}>{month}</button>)}
+            </div>
+
+            <div className="calendar-main">
+              <button type="button" className="calendar-arrow" aria-label={t.previousMonth} disabled={calendarMonth.getFullYear() === 2026 && calendarMonth.getMonth() === 0} onClick={() => moveCalendar(-1)}>←</button>
+              <CalendarMonth month={calendarMonth} language={language} checkIn={checkIn} checkOut={checkOut} onPick={selectDate} />
+              <button type="button" className="calendar-arrow" aria-label={t.nextMonth} disabled={calendarMonth.getFullYear() === 2027 && calendarMonth.getMonth() === 11} onClick={() => moveCalendar(1)}>→</button>
+            </div>
+
+          </div>
+        </div>}
         <div className="popular">{t.popular} {["Анталья", "Сиде", "Кемер", "Бодрум", "Мармарис", "Фетхие"].map((item) => <button key={item} onClick={() => setDestination(item)}>{destinationNames[language][item]}</button>)}</div>
 
       </section>
