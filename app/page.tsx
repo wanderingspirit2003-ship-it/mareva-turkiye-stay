@@ -3,7 +3,7 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 
 type Stay = {
-  id: number;
+  id: number | string;
   name: string;
   city: string;
   area: string;
@@ -11,7 +11,7 @@ type Stay = {
   stars: number;
   score: number;
   reviews: number;
-  roomSize: number;
+  roomSize: number | null;
   guests: number;
   price: number;
   oldPrice: number;
@@ -19,6 +19,11 @@ type Stay = {
   tags: string[];
   feature: string;
   distance: string;
+  link?: string;
+  officialSource?: string;
+  discount?: number;
+  checkedAt?: string;
+  live?: boolean;
 };
 
 const featuredStays: Stay[] = [
@@ -222,16 +227,16 @@ const translations = {
   ru: {
     findStay: "Найти место для отдыха", how: "Как это работает", favorites: "Избранное", login: "Войти", register: "Регистрация", account: "Аккаунт",
     eyebrow: "Независимый поиск по Турции", heroA: "Турция.", heroB: "Без переплаты.",
-    heroCopy: "Собираем отели, апарт-отели и виллы в одном поиске. Показываем полную цену и отправляем бронировать прямо к источнику.",
+    heroCopy: "Собираем предложения отелей, апарт-отелей и вилл и показываем только те, где тот же отдых стоит дешевле официальной цены.", heroPromise: "Экономим ваши деньги. Качество отдыха неизменно.",
     where: "Куда", checkIn: "Заезд", checkOut: "Выезд", guests: "Гости", find: "Найти", searching: "Ищем…", popular: "Популярно:",
     selectDates: "Выберите даты", chooseArrival: "Сначала выберите дату заезда", chooseDeparture: "Теперь выберите дату выезда", close: "Готово",
-    benefits: [["Цена целиком", "За все ночи, а не «от»"], ["Один объект — одна карточка", "Без дублей в выдаче"], ["Прямой переход", "Бронирование у источника"], ["Режим прототипа", "Цены ниже — демонстрационные"]],
+    benefits: [["Цена со скидкой", "Ниже официальной на те же даты"], ["Один объект — одна карточка", "Без дублей в выдаче"], ["Прямой переход", "Бронирование у источника"], ["Только экономия", "Полные цены не показываем"]],
     picked: "Подобрали для вас", allTurkey: "Отдых по всей Турции", housing: "Отдых", variants: "вариантов в прототипе", filters: "Фильтры", reset: "Сбросить",
     sort: "Сортировка", sortDeal: "Выгодные сначала", sortCheap: "Сначала дешевле", sortRating: "По рейтингу", type: "Тип жилья", category: "Категория", all: "Все",
     allTypes: "Все варианты", hotel: "Отель", apart: "Апарт-отель", villa: "Вилла", area: "Площадь номера", anyArea: "Любая площадь", up20: "До 20 м²", from20: "От 20 до 30 м²", from30: "От 30 до 40 м²", over40: "Выше 40 м²",
     price: "Цена за 6 ночей", upTo: "до", meal: "Питание", anyMeal: "Любое питание", noMeal: "Без питания", breakfast: "Завтрак включён", halfBoard: "Полупансион · завтрак и ужин", fullBoard: "Полный пансион · завтрак, обед и ужин", allInclusive: "Всё включено", webTitle: "Поиск без договоров", webText: "Открытые страницы и поисковые ссылки. Цена всегда перепроверяется на сайте источника.",
     excellent: "Превосходно", reviews: "отзывов", upToGuests: "до", guestWord: "гостей", demoPrice: "за 6 ночей · демо-цена", checkWeb: "Проверить в интернете",
-    requestReady: "Запрос подготовлен", requestText: "Для актуальных цен используйте «Проверить в интернете». Портал передаст название, город и даты внешнему поиску.", noMatches: "Подходящих вариантов пока нет", expand: "Расширьте направление, бюджет или площадь номера.", showTurkey: "Показать всю Турцию", deal: "к обычной цене",
+    requestReady: "Живой поиск завершён", requestText: "Показаны только предложения дешевле официальной цены на те же даты. Полные цены без скидки исключены.", noMatches: "Подтверждённых скидок пока нет", expand: "Попробуйте другие даты, направление или условия. Полные цены мы намеренно не показываем.", showTurkey: "Искать по всей Турции", deal: "к официальной цене", startLive: "Задайте даты и запустите живой поиск скидок", sourceMissing: "Для живого поиска требуется подключить технический ключ источника цен.", sizeAtSource: "Площадь у источника", officialPrice: "официальная цена", checkedNow: "проверено сейчас",
     howKicker: "Как работает Mareva", howA: "Мы ищем.", howB: "Вы выбираете.", howCopy: "Портал не принимает оплату и не скрывает источник предложения. На первом этапе он помогает сформировать точный запрос и проверить вариант в открытом интернете.",
     steps: [["Задайте условия", "Направление, даты, гости, тип жилья, площадь и бюджет."], ["Сравните варианты", "Единый формат карточек помогает быстро убрать неподходящее."], ["Проверьте цену", "Откроется свежая поисковая выдача с названием и городом объекта."], ["Бронируйте у источника", "Оплата и подтверждение происходят на выбранном внешнем сайте."]],
     roadmapKicker: "Развитие продукта", roadmapA: "Сегодня — веб-поиск.", roadmapB: "Завтра — единая цена.", roadmap: [["Сейчас", "Открытый веб-поиск", "Прямые ссылки, официальные сайты, ручная перепроверка."], ["Этап 2", "Поисковые API", "Автоматический сбор доступных страниц и обнаружение объектов."], ["Этап 3", "Партнёрские цены", "Наличие, точная стоимость и сравнение источников внутри портала."]], footerText: "Независимый поиск отдыха в Турции. Прототип MVP.", catalog: "Каталог", howSearch: "Как мы ищем",
@@ -241,16 +246,16 @@ const translations = {
   en: {
     findStay: "Find a stay", how: "How it works", favorites: "Favorites", login: "Sign in", register: "Register", account: "Account",
     eyebrow: "Independent search across Turkey", heroA: "Turkey.", heroB: "Without overpaying.",
-    heroCopy: "Hotels, aparthotels and villas in one search. See the full price and book directly with the source.",
+    heroCopy: "We find live deals below the official price. You save money while the quality of your holiday stays the same.", heroPromise: "Save money. Not memories.",
     where: "Where", checkIn: "Check-in", checkOut: "Check-out", guests: "Guests", find: "Search", searching: "Searching…", popular: "Popular:",
     selectDates: "Select dates", chooseArrival: "Choose your check-in date first", chooseDeparture: "Now choose your check-out date", close: "Done",
-    benefits: [["Full trip price", "For all nights, not ‘from’"], ["One property, one card", "No duplicates"], ["Direct handoff", "Book with the source"], ["Prototype mode", "Prices below are illustrative"]],
+    benefits: [["Discounted price", "Below the official price for the same dates"], ["One property, one card", "No duplicates"], ["Direct handoff", "Book with the source"], ["Savings only", "Full-price stays are hidden"]],
     picked: "Selected for you", allTurkey: "Stays across Turkey", housing: "Stays", variants: "prototype options", filters: "Filters", reset: "Reset",
     sort: "Sort", sortDeal: "Best deals first", sortCheap: "Lowest price", sortRating: "Highest rating", type: "Property type", category: "Category", all: "All",
     allTypes: "All properties", hotel: "Hotel", apart: "Aparthotel", villa: "Villa", area: "Room size", anyArea: "Any size", up20: "Up to 20 m²", from20: "20 to 30 m²", from30: "30 to 40 m²", over40: "Over 40 m²",
     price: "Price for 6 nights", upTo: "up to", meal: "Meal plan", anyMeal: "Any meal plan", noMeal: "No meals", breakfast: "Breakfast included", halfBoard: "Half board · breakfast and dinner", fullBoard: "Full board · breakfast, lunch and dinner", allInclusive: "All inclusive", webTitle: "Open web search", webText: "Public pages and search links. Always verify the final price with the source.",
     excellent: "Excellent", reviews: "reviews", upToGuests: "up to", guestWord: "guests", demoPrice: "6 nights · demo price", checkWeb: "Check on the web",
-    requestReady: "Search is ready", requestText: "Use “Check on the web” for live prices. Mareva will pass the property, city and dates to the external search.", noMatches: "No matching stays yet", expand: "Try a wider destination, budget or room size.", showTurkey: "Show all Turkey", deal: "vs usual price",
+    requestReady: "Live search complete", requestText: "Only offers below the official price for the same dates are shown. Full-price stays are excluded.", noMatches: "No verified discounts yet", expand: "Try other dates, a wider destination or different preferences. We intentionally hide full-price stays.", showTurkey: "Search all Turkey", deal: "below official price", startLive: "Choose dates and run a live discount search", sourceMissing: "Live search needs a technical price-source key.", sizeAtSource: "Room size at source", officialPrice: "official price", checkedNow: "checked now",
     howKicker: "How Mareva works", howA: "We search.", howB: "You choose.", howCopy: "Mareva does not take payments or hide the offer source. At this stage it builds a precise request and helps you verify it on the open web.",
     steps: [["Set your preferences", "Destination, dates, guests, property type, room size and budget."], ["Compare options", "A consistent card format makes unsuitable stays easy to remove."], ["Check the price", "A fresh web search opens with the property name and city."], ["Book with the source", "Payment and confirmation happen on the external site you choose."]],
     roadmapKicker: "Product roadmap", roadmapA: "Today — web search.", roadmapB: "Tomorrow — one live price.", roadmap: [["Now", "Open web search", "Direct links, official websites and manual verification."], ["Stage 2", "Search APIs", "Automated discovery across permitted public pages."], ["Stage 3", "Partner pricing", "Availability, exact totals and source comparison inside Mareva."]], footerText: "Independent search for stays in Turkey. MVP prototype.", catalog: "Catalog", howSearch: "How we search",
@@ -260,16 +265,16 @@ const translations = {
   tr: {
     findStay: "Konaklama bul", how: "Nasıl çalışır", favorites: "Favoriler", login: "Giriş", register: "Kayıt ol", account: "Hesabım",
     eyebrow: "Türkiye genelinde bağımsız arama", heroA: "Türkiye.", heroB: "Fazla ödemeden.",
-    heroCopy: "Otelleri, apart otelleri ve villaları tek aramada buluruz. Toplam fiyatı gösterir, rezervasyon için doğrudan kaynağa yönlendiririz.",
+    heroCopy: "Resmi fiyattan daha düşük güncel fırsatları buluruz. Siz tasarruf ederken tatil kalitesi değişmez.", heroPromise: "Paradan tasarruf edin. Anılardan değil.",
     where: "Nereye", checkIn: "Giriş", checkOut: "Çıkış", guests: "Misafir", find: "Ara", searching: "Aranıyor…", popular: "Popüler:",
     selectDates: "Tarihleri seçin", chooseArrival: "Önce giriş tarihini seçin", chooseDeparture: "Şimdi çıkış tarihini seçin", close: "Tamam",
-    benefits: [["Toplam fiyat", "Tüm geceler için"], ["Bir tesis, bir kart", "Tekrarsız sonuçlar"], ["Doğrudan yönlendirme", "Kaynakta rezervasyon"], ["Prototip modu", "Fiyatlar örnektir"]],
+    benefits: [["İndirimli fiyat", "Aynı tarihlerde resmi fiyattan düşük"], ["Bir tesis, bir kart", "Tekrarsız sonuçlar"], ["Doğrudan yönlendirme", "Kaynakta rezervasyon"], ["Yalnızca tasarruf", "Tam fiyatlı tesisler gizlenir"]],
     picked: "Sizin için seçtik", allTurkey: "Türkiye genelinde konaklama", housing: "Konaklama", variants: "prototip seçeneği", filters: "Filtreler", reset: "Sıfırla",
     sort: "Sıralama", sortDeal: "En iyi fırsatlar", sortCheap: "En düşük fiyat", sortRating: "En yüksek puan", type: "Konaklama türü", category: "Kategori", all: "Tümü",
     allTypes: "Tüm seçenekler", hotel: "Otel", apart: "Apart otel", villa: "Villa", area: "Oda büyüklüğü", anyArea: "Tüm büyüklükler", up20: "20 m²'ye kadar", from20: "20–30 m²", from30: "30–40 m²", over40: "40 m² üzeri",
     price: "6 gecelik fiyat", upTo: "en fazla", meal: "Yemek planı", anyMeal: "Tüm yemek planları", noMeal: "Yemeksiz", breakfast: "Kahvaltı dahil", halfBoard: "Yarım pansiyon · kahvaltı ve akşam yemeği", fullBoard: "Tam pansiyon · kahvaltı, öğle ve akşam yemeği", allInclusive: "Her şey dahil", webTitle: "Açık web araması", webText: "Herkese açık sayfalar ve arama bağlantıları. Son fiyatı her zaman kaynakta doğrulayın.",
     excellent: "Mükemmel", reviews: "yorum", upToGuests: "en fazla", guestWord: "misafir", demoPrice: "6 gece · demo fiyat", checkWeb: "Web'de kontrol et",
-    requestReady: "Arama hazır", requestText: "Güncel fiyatlar için “Web'de kontrol et” seçeneğini kullanın. Tesis, şehir ve tarihler dış aramaya aktarılır.", noMatches: "Uygun seçenek bulunamadı", expand: "Konumu, bütçeyi veya oda büyüklüğünü genişletin.", showTurkey: "Tüm Türkiye'yi göster", deal: "normal fiyata göre",
+    requestReady: "Canlı arama tamamlandı", requestText: "Yalnızca aynı tarihlerde resmi fiyattan daha ucuz teklifler gösterilir. Tam fiyatlı tesisler gizlenir.", noMatches: "Doğrulanmış indirim bulunamadı", expand: "Farklı tarihler, konum veya koşullar deneyin. Tam fiyatlı tesisleri bilerek göstermiyoruz.", showTurkey: "Tüm Türkiye'de ara", deal: "resmi fiyata göre", startLive: "Tarihleri seçip canlı indirim araması başlatın", sourceMissing: "Canlı arama için teknik fiyat kaynağı anahtarı gerekir.", sizeAtSource: "Oda büyüklüğü kaynakta", officialPrice: "resmi fiyat", checkedNow: "şimdi kontrol edildi",
     howKicker: "Mareva nasıl çalışır", howA: "Biz ararız.", howB: "Siz seçersiniz.", howCopy: "Mareva ödeme almaz ve teklif kaynağını gizlemez. İlk aşamada kesin bir arama oluşturur ve açık web'de doğrulamanıza yardımcı olur.",
     steps: [["Koşulları belirleyin", "Konum, tarihler, misafirler, konaklama türü, oda büyüklüğü ve bütçe."], ["Seçenekleri karşılaştırın", "Tek kart düzeni uygun olmayan seçenekleri kolayca elemenizi sağlar."], ["Fiyatı kontrol edin", "Tesis adı ve şehirle güncel web araması açılır."], ["Kaynakta rezervasyon yapın", "Ödeme ve onay seçtiğiniz dış sitede gerçekleşir."]],
     roadmapKicker: "Ürün yol haritası", roadmapA: "Bugün — web araması.", roadmapB: "Yarın — tek güncel fiyat.", roadmap: [["Şimdi", "Açık web araması", "Doğrudan bağlantılar, resmi siteler ve manuel kontrol."], ["Aşama 2", "Arama API'leri", "İzin verilen sayfalarda otomatik tesis keşfi."], ["Aşama 3", "Ortak fiyatları", "Mareva içinde müsaitlik, toplam fiyat ve kaynak karşılaştırması."]], footerText: "Türkiye'de bağımsız konaklama araması. MVP prototipi.", catalog: "Katalog", howSearch: "Nasıl ararız",
@@ -344,6 +349,19 @@ function outboundUrl(stay: Stay, destination: string) {
   return `https://www.google.com/travel/search?q=${encodeURIComponent(`${stay.name} ${place} Turkey hotel`)}`;
 }
 
+async function trackActivity(eventType: "visit" | "search" | "outbound", destination?: string) {
+  let sessionId = window.sessionStorage.getItem("mareva-session-id");
+  if (!sessionId) {
+    sessionId = crypto.randomUUID();
+    window.sessionStorage.setItem("mareva-session-id", sessionId);
+  }
+  await fetch("/api/analytics", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ eventType, destination, sessionId }),
+  }).catch(() => undefined);
+}
+
 export default function Home() {
   const [language, setLanguage] = useState<Language>("ru");
   const [destination, setDestination] = useState("Вся Турция");
@@ -356,7 +374,8 @@ export default function Home() {
   const [sizeRange, setSizeRange] = useState("any");
   const [mealPlan, setMealPlan] = useState("any");
   const [sort, setSort] = useState("Выгодные сначала");
-  const [saved, setSaved] = useState<number[]>([4]);
+  const [saved, setSaved] = useState<Array<number | string>>([]);
+  const [savedStays, setSavedStays] = useState<Stay[]>([]);
   const [searched, setSearched] = useState(false);
   const [searching, setSearching] = useState(false);
   const [filtersOpen, setFiltersOpen] = useState(false);
@@ -367,6 +386,8 @@ export default function Home() {
   const [userName, setUserName] = useState("");
   const [userEmail, setUserEmail] = useState("");
   const [history, setHistory] = useState<HistoryItem[]>(initialHistory);
+  const [liveStays, setLiveStays] = useState<Stay[]>([]);
+  const [searchError, setSearchError] = useState("");
   const t = translations[language];
   const locale = language === "ru" ? "ru-RU" : language === "tr" ? "tr-TR" : "en-GB";
 
@@ -382,25 +403,33 @@ export default function Home() {
         setUserEmail(user.email ?? "");
       } catch { setUserName("Mareva"); }
       const storedSaved = window.localStorage.getItem("mareva-account-saved");
+      const storedSavedItems = window.localStorage.getItem("mareva-account-saved-items");
       if (storedSaved) setSaved(JSON.parse(storedSaved));
+      if (storedSavedItems) setSavedStays(JSON.parse(storedSavedItems));
       if (storedHistory) setHistory(JSON.parse(storedHistory));
     } else {
       const sessionSaved = window.sessionStorage.getItem("mareva-guest-saved");
+      const sessionSavedItems = window.sessionStorage.getItem("mareva-guest-saved-items");
       if (sessionSaved) setSaved(JSON.parse(sessionSaved));
+      if (sessionSavedItems) setSavedStays(JSON.parse(sessionSavedItems));
       if (guestHistory) setHistory(JSON.parse(guestHistory));
     }
   }, []);
 
+  useEffect(() => {
+    void trackActivity("visit");
+  }, []);
+
   const filtered = useMemo(() => {
-    let items = stays.filter((stay) => {
+    let items = liveStays.filter((stay) => {
       const cityOk = destination === "Вся Турция" || stay.city === destination;
       const typeOk = type === "Все варианты" || stay.type === type;
       const sizeOk =
         sizeRange === "any" ||
-        (sizeRange === "up-to-20" && stay.roomSize <= 20) ||
-        (sizeRange === "20-30" && stay.roomSize >= 20 && stay.roomSize < 30) ||
-        (sizeRange === "30-40" && stay.roomSize >= 30 && stay.roomSize <= 40) ||
-        (sizeRange === "over-40" && stay.roomSize > 40);
+        (sizeRange === "up-to-20" && stay.roomSize !== null && stay.roomSize <= 20) ||
+        (sizeRange === "20-30" && stay.roomSize !== null && stay.roomSize >= 20 && stay.roomSize < 30) ||
+        (sizeRange === "30-40" && stay.roomSize !== null && stay.roomSize >= 30 && stay.roomSize <= 40) ||
+        (sizeRange === "over-40" && stay.roomSize !== null && stay.roomSize > 40);
       const mealOk = mealPlan === "any" || mealPlanOf(stay) === mealPlan;
       return cityOk && typeOk && stay.stars >= stars && stay.price <= maxPrice && sizeOk && mealOk && stay.guests >= guests;
     });
@@ -408,11 +437,19 @@ export default function Home() {
     if (sort === "По рейтингу") items = [...items].sort((a, b) => b.score - a.score);
     if (sort === "Выгодные сначала") items = [...items].sort((a, b) => (b.oldPrice - b.price) / b.oldPrice - (a.oldPrice - a.price) / a.oldPrice);
     return items;
-  }, [destination, guests, maxPrice, mealPlan, sizeRange, sort, stars, type]);
+  }, [destination, guests, liveStays, maxPrice, mealPlan, sizeRange, sort, stars, type]);
 
-  function runSearch() {
+  async function runSearch() {
     setSearching(true);
-    setTimeout(() => {
+    setSearchError("");
+    setSearched(false);
+    void trackActivity("search", destination);
+    try {
+      const params = new URLSearchParams({ destination, checkIn, checkOut, guests: String(guests), language });
+      const response = await fetch(`/api/hotels/search?${params.toString()}`);
+      const payload = await response.json() as { offers?: Stay[]; error?: string; message?: string };
+      if (!response.ok) throw new Error(payload.error === "SOURCE_NOT_CONFIGURED" ? t.sourceMissing : payload.message || t.noMatches);
+      setLiveStays(payload.offers || []);
       const item: HistoryItem = {
         id: Date.now(), kind: "search", destination,
         dates: `${checkIn.split("-").reverse().slice(0, 2).join(".")}–${checkOut.split("-").reverse().join(".")}`,
@@ -424,17 +461,29 @@ export default function Home() {
         storage.setItem(signedIn ? "mareva-history" : "mareva-guest-history", JSON.stringify(next));
         return next;
       });
-      setSearching(false);
       setSearched(true);
       document.getElementById("results")?.scrollIntoView({ behavior: "smooth", block: "start" });
-    }, 700);
+    } catch (error) {
+      setLiveStays([]);
+      setSearched(true);
+      setSearchError(error instanceof Error ? error.message : t.noMatches);
+    } finally {
+      setSearching(false);
+    }
   }
 
-  function toggleSaved(id: number) {
+  function toggleSaved(stay: Stay) {
+    const id = stay.id;
     setSaved((current) => {
       const next = current.includes(id) ? current.filter((item) => item !== id) : [...current, id];
       const storage = signedIn ? window.localStorage : window.sessionStorage;
       storage.setItem(signedIn ? "mareva-account-saved" : "mareva-guest-saved", JSON.stringify(next));
+      return next;
+    });
+    setSavedStays((current) => {
+      const next = current.some((item) => item.id === id) ? current.filter((item) => item.id !== id) : [stay, ...current];
+      const storage = signedIn ? window.localStorage : window.sessionStorage;
+      storage.setItem(signedIn ? "mareva-account-saved-items" : "mareva-guest-saved-items", JSON.stringify(next));
       return next;
     });
   }
@@ -472,6 +521,7 @@ export default function Home() {
     const fullName = [name, patronymic].filter(Boolean).join(" ");
     window.localStorage.setItem("mareva-demo-user", JSON.stringify({ name: fullName, email }));
     window.localStorage.setItem("mareva-account-saved", JSON.stringify(saved));
+    window.localStorage.setItem("mareva-account-saved-items", JSON.stringify(savedStays));
     window.localStorage.setItem("mareva-history", JSON.stringify(history.slice(0, 10)));
     setUserName(fullName);
     setUserEmail(email);
@@ -485,7 +535,9 @@ export default function Home() {
     setUserName("");
     setUserEmail("");
     const sessionSaved = window.sessionStorage.getItem("mareva-guest-saved");
+    const sessionSavedItems = window.sessionStorage.getItem("mareva-guest-saved-items");
     setSaved(sessionSaved ? JSON.parse(sessionSaved) : []);
+    setSavedStays(sessionSavedItems ? JSON.parse(sessionSavedItems) : []);
     setAuthMode(null);
   }
 
@@ -517,6 +569,7 @@ export default function Home() {
         <div className="eyebrow"><span className="live-dot" /> {t.eyebrow}</div>
         <h1>{t.heroA}<br/><em>{t.heroB}</em></h1>
         <p className="hero-copy">{t.heroCopy}</p>
+        <div className="hero-promise">{t.heroPromise}</div>
 
         <div className="search-shell">
         <div className="search-panel" aria-label={t.findStay}>
@@ -576,7 +629,7 @@ export default function Home() {
           </div>
         </div>
 
-        {searched && (
+        {searched && !searchError && (
           <div className="search-status">
             <span className="status-icon">✓</span>
             <div><strong>{t.requestReady}</strong><span>{t.requestText}</span></div>
@@ -630,17 +683,18 @@ export default function Home() {
           </aside>
 
           <div className="results-list">
-            {filtered.length === 0 && (
-              <div className="empty-state"><span>⌁</span><h3>{t.noMatches}</h3><p>{t.expand}</p><button onClick={() => { setDestination("Вся Турция"); setMaxPrice(1400); setSizeRange("any"); setMealPlan("any"); }}>{t.showTurkey}</button></div>
+            {!searched && <div className="empty-state live-intro"><span>⌁</span><h3>{t.startLive}</h3><p>{t.requestText}</p></div>}
+            {searched && filtered.length === 0 && (
+              <div className="empty-state"><span>⌁</span><h3>{searchError || t.noMatches}</h3><p>{searchError ? t.sourceMissing : t.expand}</p><button onClick={() => { setDestination("Вся Турция"); setMaxPrice(1400); setSizeRange("any"); setMealPlan("any"); }}>{t.showTurkey}</button></div>
             )}
             {filtered.map((stay) => {
-              const discount = Math.round((1 - stay.price / stay.oldPrice) * 100);
+              const discount = stay.discount ?? Math.round((1 - stay.price / stay.oldPrice) * 100);
               return (
                 <article className="hotel-card" key={stay.id}>
                   <div className="hotel-image-wrap">
-                    <img className="hotel-image" src={stay.image} alt={`${stay.name}, ${stay.city}`} />
+                    <img className="hotel-image" src={stay.image || "/hero-istanbul.png"} alt={`${stay.name}, ${stay.city}`} />
                     <span className="deal-badge">−{discount}% {t.deal}</span>
-                    <button className={`heart ${saved.includes(stay.id) ? "saved" : ""}`} onClick={() => toggleSaved(stay.id)} aria-label={saved.includes(stay.id) ? "Удалить из избранного" : "Добавить в избранное"}>{saved.includes(stay.id) ? "♥" : "♡"}</button>
+                    <button className={`heart ${saved.includes(stay.id) ? "saved" : ""}`} onClick={() => toggleSaved(stay)} aria-label={saved.includes(stay.id) ? "Удалить из избранного" : "Добавить в избранное"}>{saved.includes(stay.id) ? "♥" : "♡"}</button>
                     <span className="photo-count">1 / 8</span>
                   </div>
                   <div className="hotel-content">
@@ -648,11 +702,11 @@ export default function Home() {
                     <h3>{stay.name}</h3>
                     <p className="location">{stay.area}, {destinationNames[language][stay.city]} · {stay.distance}</p>
                     <div className="rating-row"><strong>{stay.score}</strong><span>{t.excellent}<br/><small>{stay.reviews} {t.reviews}</small></span></div>
-                    <div className="room-line"><strong>{stay.roomSize} м² · {t.upToGuests} {stay.guests} {t.guestWord}</strong><span>{stay.feature}</span></div>
+                    <div className="room-line"><strong>{stay.roomSize ? `${stay.roomSize} м²` : t.sizeAtSource} · {t.upToGuests} {stay.guests} {t.guestWord}</strong><span>{stay.feature}</span></div>
                     <div className="tag-row">{stay.tags.map((tag) => <span key={tag}>{tag}</span>)}</div>
                     <div className="price-row">
-                      <div><span className="old-price">€{stay.oldPrice.toLocaleString(locale)}</span><strong>€{stay.price.toLocaleString(locale)}</strong><small>{t.demoPrice}</small></div>
-                      <a className="check-button" href={outboundUrl(stay, destination)} target="_blank" rel="noreferrer">{t.checkWeb} <span>↗</span></a>
+                      <div><span className="old-price">€{stay.oldPrice.toLocaleString(locale)} · {t.officialPrice}</span><strong>€{stay.price.toLocaleString(locale)}</strong><small>{stay.live ? `${stay.feature} · ${t.checkedNow}` : t.demoPrice}</small></div>
+                      <a className="check-button" href={stay.link || outboundUrl(stay, destination)} target="_blank" rel="noreferrer" onClick={() => void trackActivity("outbound", stay.city)}>{t.checkWeb} <span>↗</span></a>
                     </div>
                   </div>
                 </article>
@@ -701,7 +755,7 @@ export default function Home() {
             {!signedIn && <div className="guest-account-note"><p>{t.guestNote}</p><button type="button" onClick={() => setAuthMode("register")}>{t.keepFavorites}</button></div>}
             <div className="account-columns">
               <div className="account-section"><div className="account-section-head"><h3>{t.favoritesTitle}</h3><span>{saved.length}</span></div>
-                <div className="favorite-list">{saved.length ? saved.map((id) => stays.find((stay) => stay.id === id)).filter(Boolean).map((stay) => stay && <button type="button" key={stay.id} onClick={() => { setDestination(stay.city); setAuthMode(null); document.getElementById("results")?.scrollIntoView({ behavior: "smooth" }); }}><img src={stay.image} alt="" /><span><strong>{stay.name}</strong><small>{destinationNames[language][stay.city]} · {stay.roomSize} м²</small></span><b>→</b></button>) : <p className="empty-account">{t.noFavorites}</p>}</div>
+                <div className="favorite-list">{savedStays.length ? savedStays.map((stay) => <a href={stay.link || outboundUrl(stay, stay.city)} target="_blank" rel="noreferrer" key={stay.id}><img src={stay.image || "/hero-istanbul.png"} alt="" /><span><strong>{stay.name}</strong><small>{destinationNames[language][stay.city] || stay.city} · −{stay.discount ?? Math.round((1 - stay.price / stay.oldPrice) * 100)}%</small></span><b>↗</b></a>) : <p className="empty-account">{t.noFavorites}</p>}</div>
               </div>
               <div className="account-section"><div className="account-section-head"><h3>{t.recent}</h3><span>{history.slice(0, 10).length}</span></div>
                 <div className="history-list">{history.slice(0, 10).map((item) => <button type="button" key={item.id} onClick={() => { setDestination(item.destination); setGuests(item.guests); setAuthMode(null); }}><span className={`history-kind ${item.kind}`}>{item.kind === "booking" ? t.booking : t.search}</span><span><strong>{destinationNames[language][item.destination]}</strong><small>{item.dates} · {item.guests}</small></span><b>{t.repeat} →</b></button>)}</div>

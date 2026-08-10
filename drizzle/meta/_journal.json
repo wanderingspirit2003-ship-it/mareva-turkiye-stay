@@ -1,5 +1,13 @@
 {
   "version": "7",
   "dialect": "sqlite",
-  "entries": []
+  "entries": [
+    {
+      "idx": 0,
+      "version": "6",
+      "when": 1786378174451,
+      "tag": "0000_breezy_gargoyle",
+      "breakpoints": true
+    }
+  ]
 }
