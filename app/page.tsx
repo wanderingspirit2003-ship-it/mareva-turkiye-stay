@@ -639,7 +639,7 @@ export default function Home() {
 
           </div>
         </div>}
-        <div className="popular">{t.popular} {["Анталья", "Сиде", "Кемер", "Бодрум", "Мармарис", "Фетхие"].map((item) => <button key={item} onClick={() => setDestination(item)}>{destinationNames[language][item]}</button>)}</div>
+        <div className="popular">{t.popular} {["Анталья", "Сиде", "Кемер", "Бодрум", "Мармарис", "Фетхие"].map((item) => <button key={item} type="button" aria-pressed={destination === item} className={destination === item ? "active" : ""} onClick={() => setDestination(item)}>{destinationNames[language][item]}</button>)}</div>
 
       </section>
 
