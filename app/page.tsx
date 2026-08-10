@@ -327,9 +327,12 @@ function CalendarMonth({ month, language, checkIn, checkOut, onPick }: { month: 
   const weekdays = Array.from({ length: 7 }, (_, index) => new Intl.DateTimeFormat(locale, { weekday: "long" }).format(new Date(weekdayBase.getFullYear(), weekdayBase.getMonth(), weekdayBase.getDate() + index)));
   const start = parseIso(checkIn).getTime();
   const end = parseIso(checkOut).getTime();
+  const monthTitle = language === "ru"
+    ? `${new Intl.DateTimeFormat(locale, { month: "long" }).format(month)} ${year} год`
+    : new Intl.DateTimeFormat(locale, { month: "long", year: "numeric" }).format(month);
   return (
     <div className="calendar-month">
-      <h3>{new Intl.DateTimeFormat(locale, { month: "long", year: "numeric" }).format(month)}</h3>
+      <h3>{monthTitle}</h3>
       <div className="weekdays">{weekdays.map((day) => <span key={day}>{day}</span>)}</div>
       <div className="days-grid">
         {cells.map((date, index) => date ? (
