@@ -39,17 +39,29 @@ a { color: inherit; text-decoration: none; }
 }
 .brand { display: inline-flex; align-items: center; gap: 11px; width: fit-content; font-weight: 800; font-size: 21px; letter-spacing: -.8px; }
 .brand-mark { display: grid; place-items: center; width: 35px; height: 35px; border-radius: 50% 50% 48% 52% / 58% 45% 55% 42%; background: var(--coral); color: white; font-family: var(--font-display); font-style: italic; }
+.brand-icon { width: 38px; height: 38px; border-radius: 50%; object-fit: cover; }
 .site-header nav { display: flex; align-items: center; gap: 34px; font-size: 13px; font-weight: 700; }
 .site-header nav a { transition: color .2s; }
 .site-header nav a:hover { color: var(--coral); }
 .saved-link { border: 0; background: none; padding: 0; cursor: pointer; font-weight: 700; }
 .saved-link span { display: inline-grid; place-items: center; min-width: 20px; height: 20px; margin-left: 4px; background: var(--aqua); border-radius: 20px; font-size: 11px; }
-.profile { justify-self: end; width: 38px; height: 38px; border: 1px solid var(--ink); border-radius: 50%; background: transparent; font-weight: 800; font-size: 12px; cursor: pointer; }
+.header-actions { justify-self: end; display: flex; align-items: center; gap: 14px; }
+.language-switch { display: flex; padding: 3px; border: 1px solid var(--line); border-radius: 20px; background: white; }
+.language-switch button { width: 33px; height: 27px; border: 0; border-radius: 16px; background: transparent; font-size: 9px; font-weight: 900; cursor: pointer; }
+.language-switch button.active { background: var(--ink); color: white; }
+.auth-actions { display: flex; align-items: center; gap: 7px; }
+.auth-actions button, .account-button { padding: 9px 13px; border: 0; background: transparent; border-radius: 6px; font-size: 11px; font-weight: 850; cursor: pointer; }
+.auth-actions .register-button { background: var(--ink); color: white; }
+.account-button { display: flex; align-items: center; gap: 7px; background: #edf5f1; }
+.account-button img { width: 23px; height: 23px; border-radius: 50%; }
 
 .hero {
   min-height: 535px;
   padding: 65px 5vw 58px;
-  background: var(--cream);
+  background-color: var(--cream);
+  background-image: linear-gradient(90deg, rgba(246,241,231,.99) 0%, rgba(246,241,231,.94) 38%, rgba(246,241,231,.48) 65%, rgba(246,241,231,.08) 100%), url('/hero-istanbul.png');
+  background-size: cover;
+  background-position: center right;
   position: relative;
   overflow: hidden;
 }
@@ -65,8 +77,9 @@ a { color: inherit; text-decoration: none; }
 .orbit-two { width: 320px; height: 320px; right: 5vw; top: -70px; border-color: rgba(238,107,77,.18); }
 .sun-mark { position: absolute; top: 118px; right: 12vw; color: var(--coral); font-size: 58px; opacity: .78; }
 
+.search-shell { max-width: 1180px; position: relative; }
 .search-panel {
-  max-width: 1180px;
+  max-width: none;
   min-height: 90px;
   display: grid;
   grid-template-columns: 1.25fr 1fr 1fr .8fr auto;
@@ -78,13 +91,33 @@ a { color: inherit; text-decoration: none; }
 }
 .search-field { padding: 13px 20px; border-right: 1px solid var(--line); display: flex; flex-direction: column; gap: 7px; min-width: 0; }
 .search-field span { font-size: 10px; text-transform: uppercase; letter-spacing: 1.1px; font-weight: 800; color: #71817e; }
-.search-field input, .search-field select { border: 0; outline: 0; color: var(--ink); background: transparent; min-width: 0; width: 100%; font-weight: 750; cursor: pointer; }
+.search-field input, .search-field select, .date-field button { border: 0; outline: 0; color: var(--ink); background: transparent; min-width: 0; width: 100%; font-weight: 750; cursor: pointer; }
+.date-field button { padding: 0; display: flex; align-items: center; justify-content: space-between; text-align: left; }
+.date-field button b { color: var(--coral); font-size: 15px; }
 .search-button { min-width: 145px; border: 0; border-radius: 8px; background: var(--coral); color: white; font-weight: 800; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 20px; transition: .2s; }
 .search-button:hover { background: var(--coral-dark); transform: translateY(-1px); }
 .search-button:disabled { opacity: .7; cursor: wait; }
 .search-button span { font-size: 20px; }
 .popular { margin-top: 18px; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; color: var(--ink-soft); font-size: 12px; }
 .popular button { padding: 5px 10px; background: rgba(255,255,255,.55); border: 1px solid rgba(18,58,54,.14); border-radius: 20px; cursor: pointer; }
+
+.calendar-popover { position: absolute; z-index: 60; top: calc(100% + 12px); left: 205px; width: min(790px, calc(100vw - 50px)); padding: 24px; background: white; border: 1px solid rgba(18,58,54,.15); border-radius: 13px; box-shadow: 0 24px 65px rgba(18,58,54,.22); }
+.calendar-head { display: flex; justify-content: space-between; align-items: center; padding-bottom: 18px; border-bottom: 1px solid var(--line); }
+.calendar-head > div:first-child { display: flex; flex-direction: column; gap: 4px; }
+.calendar-head strong { font-family: var(--font-display); font-size: 24px; }
+.calendar-head span { color: #71817e; font-size: 11px; }
+.calendar-nav { display: flex; align-items: center; gap: 7px; }
+.calendar-nav button { width: 38px; height: 38px; border: 1px solid var(--line); border-radius: 50%; background: white; font-weight: 900; cursor: pointer; }
+.calendar-nav .calendar-done { width: auto; padding: 0 15px; border-radius: 20px; background: var(--ink); color: white; }
+.calendar-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 30px; padding-top: 21px; }
+.calendar-month h3 { margin: 0 0 15px; text-align: center; font-size: 14px; text-transform: capitalize; }
+.weekdays, .days-grid { display: grid; grid-template-columns: repeat(7, 1fr); }
+.weekdays span { padding-bottom: 8px; text-align: center; color: #8b9895; font-size: 9px; font-weight: 800; text-transform: uppercase; }
+.days-grid > span, .days-grid button { aspect-ratio: 1; display: grid; place-items: center; }
+.days-grid button { position: relative; border: 0; border-radius: 50%; background: transparent; font-size: 12px; font-weight: 700; cursor: pointer; }
+.days-grid button:hover { background: var(--aqua); }
+.days-grid button.in-range { border-radius: 0; background: #edf6f2; }
+.days-grid button.selected { background: var(--coral); color: white; border-radius: 50%; z-index: 1; }
 
 .trust-strip { display: grid; grid-template-columns: repeat(4, 1fr); background: var(--ink); color: white; padding: 26px 5vw; }
 .trust-strip div { display: flex; flex-direction: column; gap: 5px; padding: 2px 26px; border-left: 1px solid rgba(255,255,255,.15); }
@@ -191,6 +224,46 @@ footer { padding: 34px 5vw; background: #0b2c29; color: white; display: grid; gr
 footer p { font-size: 10px; color: rgba(255,255,255,.5); }
 footer > div { justify-self: end; display: flex; gap: 22px; font-size: 10px; color: rgba(255,255,255,.7); }
 
+.modal-backdrop { position: fixed; inset: 0; z-index: 100; display: grid; place-items: center; padding: 22px; background: rgba(5,31,28,.68); backdrop-filter: blur(7px); }
+.account-modal { position: relative; width: min(470px, 100%); max-height: calc(100vh - 44px); overflow: auto; padding: 38px; background: var(--paper); border-radius: 14px; box-shadow: 0 30px 90px rgba(0,0,0,.3); }
+.account-modal.wide { width: min(940px, 100%); }
+.modal-close { position: absolute; top: 14px; right: 14px; width: 35px; height: 35px; border: 1px solid var(--line); border-radius: 50%; background: white; font-size: 20px; cursor: pointer; }
+.auth-icon { width: 64px; height: 64px; border-radius: 50%; margin-bottom: 20px; }
+.account-modal > h2 { margin: 8px 0 5px; font-family: var(--font-display); font-size: 36px; font-weight: 500; }
+.auth-note { margin: 0 0 25px; color: var(--ink-soft); font-size: 12px; }
+.auth-form { display: grid; gap: 15px; }
+.auth-form label { display: grid; gap: 7px; font-size: 10px; font-weight: 850; text-transform: uppercase; letter-spacing: .7px; }
+.auth-form label small { display: inline; color: #8b9895; font-size: 8px; font-weight: 600; text-transform: none; }
+.auth-form input { width: 100%; padding: 13px 14px; border: 1px solid var(--line); border-radius: 6px; background: white; font-size: 13px; text-transform: none; letter-spacing: 0; }
+.auth-form > button { margin-top: 5px; padding: 14px; border: 0; border-radius: 6px; background: var(--coral); color: white; font-weight: 850; cursor: pointer; }
+.auth-form > button span { float: right; }
+.account-identity { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 16px; padding-bottom: 23px; border-bottom: 1px solid var(--line); }
+.account-identity > img { width: 58px; height: 58px; border-radius: 50%; }
+.account-identity span { color: var(--coral); font-size: 9px; font-weight: 900; text-transform: uppercase; letter-spacing: 1px; }
+.account-identity h2 { margin: 3px 0; font-family: var(--font-display); font-size: 30px; font-weight: 550; }
+.account-identity p { margin: 0; color: #71817e; font-size: 11px; }
+.account-identity > button { border: 0; background: transparent; color: var(--coral); font-size: 10px; font-weight: 850; cursor: pointer; }
+.guest-account-note { margin-top: 18px; padding: 15px 17px; display: flex; justify-content: space-between; align-items: center; gap: 18px; background: #edf6f2; border-radius: 7px; }
+.guest-account-note p { margin: 0; max-width: 520px; font-size: 11px; line-height: 1.5; }
+.guest-account-note button { padding: 10px 13px; border: 0; border-radius: 5px; background: var(--ink); color: white; font-size: 10px; font-weight: 850; white-space: nowrap; cursor: pointer; }
+.account-columns { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-top: 24px; }
+.account-section { min-width: 0; }
+.account-section-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 11px; }
+.account-section-head h3 { margin: 0; font-size: 12px; }
+.account-section-head span { display: grid; place-items: center; min-width: 23px; height: 23px; border-radius: 20px; background: var(--aqua); font-size: 9px; font-weight: 900; }
+.favorite-list, .history-list { display: grid; max-height: 385px; overflow: auto; border-top: 1px solid var(--line); }
+.favorite-list button, .history-list button { width: 100%; min-width: 0; padding: 10px 2px; display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 10px; border: 0; border-bottom: 1px solid var(--line); background: transparent; text-align: left; cursor: pointer; }
+.favorite-list button > img { width: 48px; height: 43px; border-radius: 5px; object-fit: cover; }
+.favorite-list button > span, .history-list button > span:nth-child(2) { min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.favorite-list strong, .history-list strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 10px; }
+.favorite-list small, .history-list small { color: #778783; font-size: 8px; }
+.favorite-list b { color: var(--coral); }
+.history-kind { padding: 4px 6px; border-radius: 3px; background: #e9f3ef; font-size: 7px; font-weight: 900; text-transform: uppercase; }
+.history-kind.booking { background: #ffe5de; color: #a8412c; }
+.history-list button > b { color: var(--coral); font-size: 8px; white-space: nowrap; }
+.empty-account { padding: 20px 4px; color: #778783; font-size: 11px; line-height: 1.5; }
+.account-local-note { margin: 18px 0 0; color: #8b9895; font-size: 9px; text-align: center; }
+
 @media (max-width: 950px) {
   .site-header { grid-template-columns: 1fr auto; }
   .site-header nav { display: none; }
@@ -204,10 +277,16 @@ footer > div { justify-self: end; display: flex; gap: 22px; font-size: 10px; col
   .catalog-layout { grid-template-columns: 205px minmax(0, 1fr); gap: 22px; }
   .hotel-card { grid-template-columns: 1fr; }
   .hotel-image-wrap { min-height: 260px; }
+  .calendar-popover { left: 0; }
 }
 
 @media (max-width: 680px) {
   .site-header { height: 66px; padding: 0 20px; }
+  .brand > span:last-child { display: none; }
+  .header-actions { gap: 7px; }
+  .auth-actions button:first-child { display: none; }
+  .auth-actions .register-button { padding: 8px 10px; }
+  .account-button { padding: 6px 8px; }
   .hero { padding: 47px 20px 40px; min-height: auto; }
   .hero h1 { font-size: 55px; letter-spacing: -2.5px; }
   .hero-copy { font-size: 14px; }
@@ -219,6 +298,11 @@ footer > div { justify-self: end; display: flex; gap: 22px; font-size: 10px; col
   .search-field:nth-of-type(3) { border-right: 0; }
   .search-field:nth-of-type(4) { grid-column: 1 / -1; border-right: 0; border-top: 1px solid var(--line); }
   .search-button { grid-column: 1 / -1; min-height: 52px; }
+  .calendar-popover { width: calc(100vw - 40px); padding: 17px; }
+  .calendar-grid { grid-template-columns: 1fr; }
+  .calendar-month:nth-child(2) { display: none; }
+  .calendar-head strong { font-size: 19px; }
+  .calendar-head span { max-width: 180px; }
   .trust-strip { padding: 24px 20px; grid-template-columns: 1fr; gap: 18px; }
   .trust-strip div, .trust-strip div:nth-child(3) { padding: 0; border: 0; }
   .results-section { padding: 58px 20px 68px; }
@@ -243,6 +327,9 @@ footer > div { justify-self: end; display: flex; gap: 22px; font-size: 10px; col
   .roadmap-item::before { top: 4px; }
   footer { padding: 30px 20px; grid-template-columns: 1fr; }
   footer > div { justify-self: start; flex-wrap: wrap; }
+  .account-modal { padding: 30px 20px 24px; }
+  .account-columns { grid-template-columns: 1fr; }
+  .guest-account-note { align-items: flex-start; flex-direction: column; }
 }
 
 @media (prefers-reduced-motion: reduce) {

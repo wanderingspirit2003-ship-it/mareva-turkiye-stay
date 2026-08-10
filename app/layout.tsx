@@ -24,6 +24,7 @@ export async function generateMetadata(): Promise<Metadata> {
     metadataBase: new URL(baseUrl),
     title: "Mareva — поиск отелей в Турции",
     description: "Независимый поиск отелей, апарт-отелей и вилл в Турции с переходом к источнику бронирования.",
+    icons: { icon: "/favicon.png", apple: "/mareva-icon.png" },
     openGraph: {
       title: "Mareva — Турция без переплаты",
       description: "Независимый поиск жилья в Турции.",
