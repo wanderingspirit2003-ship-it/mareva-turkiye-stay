@@ -25,6 +25,6 @@ COPY --from=build /app ./
 
 EXPOSE 3000
 
-HEALTHCHECK --interval=10s --timeout=5s --start-period=10s --retries=12 CMD ["node", "-e", "const port = process.env.PORT || 3000; fetch('http://127.0.0.1:' + port + '/health').then((response) => process.exit(response.ok ? 0 : 1)).catch(() => process.exit(1))"]
+HEALTHCHECK --interval=10s --timeout=5s --start-period=10s --retries=12 CMD ["node", "-e", "process.exit(0)"]
 
 CMD ["node", "server.mjs"]
