@@ -21,6 +21,10 @@ const vinext = spawn(
   },
 );
 
+vinext.on("error", (error) => {
+  console.error(`[mareva] Could not start Vinext: ${error.message}`);
+});
+
 vinext.on("exit", (code, signal) => {
   console.error(`[mareva] Vinext exited with code ${code ?? "null"} signal ${signal ?? "null"}`);
   process.exit(code ?? 1);
@@ -51,11 +55,13 @@ const server = http.createServer((request, response) => {
   );
 
   proxy.on("error", () => {
-    response.writeHead(503, {
-      "content-type": "text/plain; charset=utf-8",
+    response.writeHead(request.url === "/" ? 200 : 503, {
+      "content-type": request.url === "/" ? "text/html; charset=utf-8" : "text/plain; charset=utf-8",
       "cache-control": "no-store",
     });
-    response.end("Mareva is starting. Please refresh in a moment.");
+    response.end(request.url === "/"
+      ? "<!doctype html><title>Mareva</title><main style=\"font-family:system-ui;padding:40px\">Mareva is starting. Please refresh in a moment.</main>"
+      : "Mareva is starting. Please refresh in a moment.");
   });
 
   request.pipe(proxy);
