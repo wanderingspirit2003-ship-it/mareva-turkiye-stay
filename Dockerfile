@@ -25,4 +25,4 @@ COPY --from=build /app ./
 
 EXPOSE 3000
 
-CMD ["sh", "-c", "npx vinext start --hostname 0.0.0.0 --port ${PORT:-3000}"]
+CMD ["npm", "run", "start"]
