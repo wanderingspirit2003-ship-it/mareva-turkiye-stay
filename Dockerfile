@@ -25,6 +25,6 @@ COPY --from=build /app ./
 
 EXPOSE 3000
 
-HEALTHCHECK --interval=15s --timeout=5s --start-period=60s --retries=8 CMD node -e "const port = process.env.PORT || 3000; fetch(`http://127.0.0.1:${port}/health`).then((response) => { if (!response.ok) process.exit(1); }).catch(() => process.exit(1));"
+HEALTHCHECK --interval=5s --timeout=5s --start-period=10s --retries=12 CMD node -e 'const port = process.env.PORT || 3000; fetch("http://127.0.0.1:" + port + "/health").then((response) => { if (!response.ok) process.exit(1); }).catch(() => process.exit(1));'
 
 CMD ["sh", "-c", "npx vinext start --hostname 0.0.0.0 --port ${PORT:-3000}"]
