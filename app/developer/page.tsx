@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
 
 type Analytics = {
@@ -23,7 +24,7 @@ export default function DeveloperDashboard() {
   const ctr = data && Number(data.totals.searches) > 0 ? Math.round(Number(data.totals.outbound) / Number(data.totals.searches) * 100) : 0;
 
   return <main className="developer-page">
-    <header className="developer-header"><a href="/"><img src="/favicon.png" alt="" /><span>mareva</span></a><span>Developer pulse</span></header>
+    <header className="developer-header"><Link href="/"><img src="/favicon.png" alt="" /><span>mareva</span></Link><span>Developer pulse</span></header>
     <section className="developer-hero"><span>Внутренняя аналитика</span><h1>Как работает<br/><em>наш портал.</em></h1><p>Посещения, поиски и переходы к бронированию. Данные обновляются после перезагрузки страницы.</p></section>
     {error && <div className="developer-error">{error}</div>}
     {!data && !error ? <div className="developer-loading">Загружаем активность…</div> : data && <section className="developer-content">

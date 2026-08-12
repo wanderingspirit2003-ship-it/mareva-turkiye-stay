@@ -1,56 +1,115 @@
-type SerpRate = {
-  lowest?: string;
-  extracted_lowest?: number;
+import { env } from "cloudflare:workers";
+
+type SearchApiPrice = {
+  extracted_price?: number;
+  extracted_price_before_taxes?: number;
 };
 
-type SerpPrice = {
+type SearchApiOffer = {
   source?: string;
   link?: string;
-  official?: boolean;
-  free_cancellation?: boolean;
-  total_rate?: SerpRate;
-  rate_per_night?: SerpRate;
+  tracking_link?: string;
+  is_official?: boolean;
+  has_free_cancellation?: boolean;
+  remarks?: string[];
+  total_price?: SearchApiPrice;
+  price_per_night?: SearchApiPrice;
 };
 
-type SerpProperty = {
+type SearchApiProperty = {
   property_token?: string;
   type?: string;
   name?: string;
+  link?: string;
+  description?: string;
   address?: string;
+  city?: string;
+  country?: string;
   extracted_hotel_class?: number;
-  overall_rating?: number;
+  rating?: number;
   reviews?: number;
-  images?: Array<{ thumbnail?: string; original_image?: string }>;
-  prices?: SerpPrice[];
-  featured_prices?: SerpPrice[];
+  deal?: string;
+  deal_description?: string;
+  price_per_night?: SearchApiPrice;
+  total_price?: SearchApiPrice;
+  images?: Array<{ thumbnail?: string; original?: string }>;
+  amenities?: string[];
+  essential_info?: string[];
+  featured_offers?: SearchApiOffer[];
+  all_offers?: SearchApiOffer[];
 };
 
-function totalOf(price: SerpPrice, nights: number) {
-  const total = price.total_rate?.extracted_lowest;
+type SearchApiResponse = {
+  properties?: SearchApiProperty[];
+  property?: SearchApiProperty;
+  pagination?: { next_page_token?: string };
+};
+
+const turkeySearchScopes = [
+  ["Анталья", "Antalya"], ["Аланья", "Alanya"], ["Белек", "Belek"], ["Сиде", "Side"],
+  ["Кемер", "Kemer"], ["Бодрум", "Bodrum"], ["Мармарис", "Marmaris"], ["Фетхие", "Fethiye"],
+  ["Олюдениз", "Oludeniz"], ["Каш", "Kas"], ["Кушадасы", "Kusadasi"], ["Чешме", "Cesme"],
+  ["Дидим", "Didim"], ["Даламан", "Dalaman"], ["Сарыгерме", "Sarigerme"], ["Измир", "Izmir"],
+  ["Стамбул", "Istanbul"], ["Каппадокия", "Cappadocia"],
+] as const;
+
+const destinationQueries = Object.fromEntries(turkeySearchScopes) as Record<string, string>;
+
+function totalOf(value: { total_price?: SearchApiPrice; price_per_night?: SearchApiPrice }, nights: number) {
+  const total = value.total_price?.extracted_price ?? value.total_price?.extracted_price_before_taxes;
   if (typeof total === "number") return total;
-  const nightly = price.rate_per_night?.extracted_lowest;
+  const nightly = value.price_per_night?.extracted_price ?? value.price_per_night?.extracted_price_before_taxes;
   return typeof nightly === "number" ? nightly * nights : null;
 }
 
-async function serpRequest(params: URLSearchParams) {
-  const response = await fetch(`https://serpapi.com/search.json?${params.toString()}`, {
-    headers: { Accept: "application/json" },
+function discountOf(deal?: string) {
+  const match = deal?.match(/(\d{1,2})\s*%/);
+  return match ? Number(match[1]) : 0;
+}
+
+function roomSizeOf(info?: string[]) {
+  const text = info?.join(" ") || "";
+  const metric = text.match(/(\d+(?:[.,]\d+)?)\s*(?:m²|m2|sq\.?\s*m)/i);
+  if (metric) return Math.round(Number(metric[1].replace(",", ".")));
+  const imperial = text.match(/(\d+(?:[.,]\d+)?)\s*(?:sq\.?\s*ft|ft²)/i);
+  return imperial ? Math.round(Number(imperial[1].replace(",", ".")) * 0.092903) : null;
+}
+
+async function searchApiRequest(params: URLSearchParams, apiKey: string) {
+  const response = await fetch(`https://www.searchapi.io/api/v1/search?${params.toString()}`, {
+    headers: {
+      Accept: "application/json",
+      Authorization: `Bearer ${apiKey}`,
+    },
   });
-  if (!response.ok) throw new Error(`SerpApi returned ${response.status}`);
-  return response.json() as Promise<Record<string, unknown>>;
+  if (!response.ok) {
+    const body = await response.text().catch(() => "");
+    throw new Error(`SearchAPI returned ${response.status}${body ? `: ${body.slice(0, 180)}` : ""}`);
+  }
+  return response.json() as Promise<SearchApiResponse>;
 }
 
 export async function GET(request: Request) {
-  const apiKey = process.env.SERPAPI_KEY;
+  const runtimeEnv = env as unknown as Record<string, string | undefined>;
+  const apiKey = runtimeEnv.SEARCHAPI_KEY;
   if (!apiKey) {
     return Response.json({ error: "SOURCE_NOT_CONFIGURED", message: "Live hotel source is not configured." }, { status: 503 });
   }
 
   const url = new URL(request.url);
   const destination = url.searchParams.get("destination") || "Turkey";
+  const hotelName = (url.searchParams.get("hotelName") || "").trim().slice(0, 120);
+  const pageToken = (url.searchParams.get("pageToken") || "").trim().slice(0, 500);
+  const requestedScopeIndex = Number(url.searchParams.get("scopeIndex") || 0);
+  const requestedOffset = Number(url.searchParams.get("offset") || 0);
+  const offset = Number.isInteger(requestedOffset) ? Math.max(0, Math.min(100, requestedOffset)) : 0;
   const checkIn = url.searchParams.get("checkIn") || "";
   const checkOut = url.searchParams.get("checkOut") || "";
-  const adults = Math.max(1, Math.min(5, Number(url.searchParams.get("guests") || 2)));
+  const adults = Math.max(1, Math.min(10, Number(url.searchParams.get("guests") || 2)));
+  const requestedMaxNightlyPrice = Number(url.searchParams.get("maxPrice") || 10000);
+  const maxNightlyPrice = Number.isFinite(requestedMaxNightlyPrice)
+    ? Math.max(400, Math.min(10000, requestedMaxNightlyPrice))
+    : 10000;
   const language = ["ru", "en", "tr"].includes(url.searchParams.get("language") || "") ? url.searchParams.get("language")! : "ru";
   const start = new Date(`${checkIn}T00:00:00Z`);
   const end = new Date(`${checkOut}T00:00:00Z`);
@@ -59,85 +118,118 @@ export async function GET(request: Request) {
     return Response.json({ error: "INVALID_DATES", message: "Choose a stay from 1 to 30 nights." }, { status: 400 });
   }
 
-  const query = destination === "Вся Турция" ? "Turkey hotels" : `${destination} Turkey hotels`;
-  const baseParams = new URLSearchParams({
+  const scopes = destination === "Вся Турция" && !hotelName
+    ? turkeySearchScopes.map(([label, queryName]) => ({ label, queryName }))
+    : [{ label: destination, queryName: destination === "Вся Турция" ? "Turkey" : destinationQueries[destination] || destination }];
+  const scopeIndex = Number.isInteger(requestedScopeIndex)
+    ? Math.max(0, Math.min(scopes.length - 1, requestedScopeIndex))
+    : 0;
+  const activeScope = scopes[scopeIndex];
+  const locationQuery = activeScope.queryName === "Turkey" ? "Turkey" : `${activeScope.queryName}, Turkey`;
+  const query = hotelName ? `${hotelName}, ${locationQuery}` : `Hotels in ${locationQuery}`;
+  const propertyType = adults > 6 ? "vacation_rental" : "hotel";
+  const searchParams = new URLSearchParams({
     engine: "google_hotels",
     q: query,
     check_in_date: checkIn,
     check_out_date: checkOut,
     adults: String(adults),
-    children: "0",
     currency: "EUR",
     gl: "tr",
     hl: language,
-    sort_by: "3",
-    api_key: apiKey,
+    property_type: propertyType,
+    sort_by: "lowest_price",
+    price_max: String(maxNightlyPrice),
   });
+  if (propertyType === "hotel") searchParams.set("special_offers", "true");
+  if (pageToken) searchParams.set("next_page_token", pageToken);
 
   try {
-    const rentalParams = new URLSearchParams(baseParams);
-    rentalParams.set("vacation_rentals", "true");
-    const [hotelSearch, rentalSearch] = await Promise.all([serpRequest(baseParams), serpRequest(rentalParams)]);
-    const hotelProperties = ((hotelSearch.properties as SerpProperty[] | undefined) || []).filter((property) => property.property_token).slice(0, 7);
-    const rentalProperties = ((rentalSearch.properties as SerpProperty[] | undefined) || []).filter((property) => property.property_token).slice(0, 5);
-    const properties = Array.from(new Map([...hotelProperties, ...rentalProperties].map((property) => [property.property_token, property])).values());
+    const search = await searchApiRequest(searchParams, apiKey);
+    const discountedProperties = (search.properties || [])
+      .filter((property) => property.property_token && discountOf(property.deal) > 0);
+    const properties = discountedProperties.slice(offset, offset + 8);
+    const nextCursor = offset + properties.length < discountedProperties.length
+      ? { scopeIndex, pageToken, offset: offset + properties.length }
+      : search.pagination?.next_page_token
+        ? { scopeIndex, pageToken: search.pagination.next_page_token, offset: 0 }
+        : scopeIndex + 1 < scopes.length
+          ? { scopeIndex: scopeIndex + 1, pageToken: "", offset: 0 }
+          : null;
     const checkedAt = new Date().toISOString();
-    const details = await Promise.all(properties.map(async (property) => {
-      const params = new URLSearchParams(baseParams);
-      params.set("property_token", property.property_token!);
-      if (property.type?.toLowerCase().includes("vacation")) params.set("vacation_rentals", "true");
-      try {
-        const detail = await serpRequest(params) as SerpProperty;
-        return { base: property, detail };
-      } catch {
-        return { base: property, detail: property };
-      }
-    }));
+    // The hotel list already contains prices, deal labels, links and galleries.
+    // Keeping one upstream call per portion preserves the SearchAPI allowance.
+    const details = properties;
 
-    const offers = details.flatMap(({ base, detail }, index) => {
-      const prices = [...(detail.featured_prices || []), ...(detail.prices || [])];
-      const official = prices
-        .filter((price) => price.official)
-        .map((price) => ({ price, total: totalOf(price, nights) }))
-        .filter((item): item is { price: SerpPrice; total: number } => item.total !== null)
+    const offers = details.flatMap((property, index) => {
+      const priced = [...(property.featured_offers || []), ...(property.all_offers || [])]
+        .map((offer) => ({ offer, total: totalOf(offer, nights) }))
+        .filter((item): item is { offer: SearchApiOffer; total: number } => item.total !== null);
+      const official = priced.filter(({ offer }) => offer.is_official).sort((a, b) => a.total - b.total)[0];
+      const bookable = priced
+        .filter(({ offer }) => !offer.is_official && (offer.link || offer.tracking_link))
         .sort((a, b) => a.total - b.total)[0];
-      const deal = prices
-        .filter((price) => !price.official && price.link)
-        .map((price) => ({ price, total: totalOf(price, nights) }))
-        .filter((item): item is { price: SerpPrice; total: number } => item.total !== null)
-        .sort((a, b) => a.total - b.total)[0];
-      if (!official || !deal || deal.total >= official.total) return [];
-      const discount = Math.round((1 - deal.total / official.total) * 100);
+      const statedDiscount = discountOf(property.deal);
+      const current = bookable?.total ?? totalOf(property, nights);
+      if (current === null || current / nights > maxNightlyPrice) return [];
+
+      const exactDiscount = official && current < official.total
+        ? Math.round((1 - current / official.total) * 100)
+        : 0;
+      const discount = exactDiscount || statedDiscount;
       if (discount < 1) return [];
-      const property = { ...base, ...detail };
-      const image = property.images?.[0]?.original_image || property.images?.[0]?.thumbnail || "";
-      const type = property.type?.toLowerCase().includes("vacation") ? "Вилла" : "Отель";
+      const usualTotal = exactDiscount
+        ? official!.total
+        : Math.round(current / (1 - Math.min(discount, 90) / 100));
+      if (usualTotal <= current) return [];
+
+      const images = Array.from(new Set((property.images || [])
+        .map((item) => item.original || item.thumbnail || "")
+        .filter(Boolean)))
+        .slice(0, 12);
+      const image = images[0] || "";
+      const descriptor = `${property.name || ""} ${property.description || ""}`.toLowerCase();
+      const isRental = property.type?.toLowerCase().includes("vacation");
+      const stayType = /apart|apartment|residence|suite|daire/.test(descriptor)
+        ? "Апарт-отель"
+        : isRental || /villa|bungalow|cottage/.test(descriptor)
+          ? "Вилла"
+          : "Отель";
+      const bookingSource = bookable?.offer.source || property.deal_description || "Google Hotels";
+      const bookingLink = bookable?.offer.link || bookable?.offer.tracking_link || property.link;
+      if (!bookingLink) return [];
+
       return [{
         id: property.property_token || `live-${index}`,
         name: property.name || "Hotel",
-        city: destination === "Вся Турция" ? "Вся Турция" : destination,
-        area: property.address || destination,
-        type,
+        city: destination !== "Вся Турция" ? destination : activeScope.label,
+        area: property.address || [property.city, property.country].filter(Boolean).join(", ") || destination,
+        type: stayType,
         stars: property.extracted_hotel_class || 0,
-        score: property.overall_rating || 0,
+        score: property.rating ? Math.min(10, Math.round(property.rating * 20) / 10) : 0,
         reviews: property.reviews || 0,
-        roomSize: null,
+        roomSize: roomSizeOf(property.essential_info),
         guests: adults,
-        price: Math.round(deal.total),
-        oldPrice: Math.round(official.total),
+        price: Math.round(current),
+        oldPrice: Math.round(usualTotal),
         image,
-        tags: [deal.price.source || "Booking source", deal.price.free_cancellation ? "Бесплатная отмена" : "Цена подтверждена"],
-        feature: deal.price.source || "Booking source",
-        distance: property.address || destination,
-        link: deal.price.link,
-        officialSource: official.price.source || property.name || "Official site",
+        images,
+        tags: [
+          bookingSource,
+          bookable?.offer.has_free_cancellation ? "Бесплатная отмена" : property.deal_description || property.deal || "Спецпредложение",
+          ...(property.amenities || []).slice(0, 4),
+        ],
+        feature: bookingSource,
+        distance: property.description || property.address || destination,
+        link: bookingLink,
+        officialSource: official?.offer.source || "обычная цена Google Hotels",
         discount,
         checkedAt,
         live: true,
       }];
     }).sort((a, b) => b.discount - a.discount || a.price - b.price);
 
-    return Response.json({ offers, checkedAt, searched: properties.length, source: "Google Hotels via SerpApi" }, {
+    return Response.json({ offers, checkedAt, searched: properties.length, nextCursor, searchedScope: activeScope.label, source: "Google Hotels via SearchAPI.io" }, {
       headers: { "Cache-Control": "private, max-age=900" },
     });
   } catch (error) {

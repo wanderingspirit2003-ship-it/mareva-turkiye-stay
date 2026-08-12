@@ -1,11 +1,6 @@
 import assert from "node:assert/strict";
-import { access, readFile, readdir } from "node:fs/promises";
+import { readFile } from "node:fs/promises";
 import test from "node:test";
-
-const developmentPreviewMeta =
-  /<meta(?=[^>]*\bname=["']codex-preview["'])(?=[^>]*\bcontent=["']development["'])[^>]*>/i;
-const templateRoot = new URL("../", import.meta.url);
-const previewRoot = new URL("../app/_sites-preview/", import.meta.url);
 
 async function render() {
   const workerUrl = new URL("../dist/server/index.js", import.meta.url);
@@ -13,79 +8,79 @@ async function render() {
   const { default: worker } = await import(workerUrl.href);
 
   return worker.fetch(
-    new Request("http://localhost/", {
-      headers: { accept: "text/html" },
-    }),
-    {
-      ASSETS: {
-        fetch: async () => new Response("Not found", { status: 404 }),
-      },
-    },
-    {
-      waitUntil() {},
-      passThroughOnException() {},
-    },
+    new Request("http://localhost/", { headers: { accept: "text/html" } }),
+    { ASSETS: { fetch: async () => new Response("Not found", { status: 404 }) } },
+    { waitUntil() {}, passThroughOnException() {} },
   );
 }
 
-test("server-renders the starter loading skeleton", async () => {
+test("server-renders the Mareva hotel portal", async () => {
   const response = await render();
   assert.equal(response.status, 200);
   assert.match(response.headers.get("content-type") ?? "", /^text\/html\b/i);
 
   const html = await response.text();
-  assert.match(html, developmentPreviewMeta);
-  assert.match(html, /<title>Your site is taking shape<\/title>/i);
-  assert.match(html, /Building your site/);
-  assert.match(html, /Your site is taking shape/);
-  assert.match(
-    html,
-    /Your first version will appear here automatically when it’s ready\./,
-  );
-  assert.doesNotMatch(html, /Codex/);
-  assert.match(html, /react-loading-skeleton/);
-  assert.match(html, /role="status"/);
+  assert.match(html, /Mareva — поиск отелей в Турции/i);
+  assert.match(html, /Турция\.<br\/><em>Без переплаты\.<\/em>/i);
+  assert.match(html, /Найти место для отдыха/i);
+  assert.match(html, /value="10"/i);
+  assert.match(html, /max="10000"/i);
+  assert.match(html, /Максимальная цена за сутки/i);
+  assert.match(html, /Сказать условия голосом/i);
+  assert.match(html, /Название отеля/i);
+  assert.match(html, /Mareva AI/i);
+  assert.match(html, /class="ai-launcher/i);
 });
 
-test("keeps the loading skeleton scoped and disposable", async () => {
-  const [preview, css, page, layout, packageJson, files] = await Promise.all([
-    readFile(new URL("SkeletonPreview.tsx", previewRoot), "utf8"),
-    readFile(new URL("preview.css", previewRoot), "utf8"),
+test("keeps OpenRouter credentials server-side", async () => {
+  const [page, route, css, envExample, gitignore] = await Promise.all([
     readFile(new URL("../app/page.tsx", import.meta.url), "utf8"),
-    readFile(new URL("../app/layout.tsx", import.meta.url), "utf8"),
-    readFile(new URL("../package.json", import.meta.url), "utf8"),
-    readdir(previewRoot),
+    readFile(new URL("../app/api/agent/route.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/globals.css", import.meta.url), "utf8"),
+    readFile(new URL("../.env.example", import.meta.url), "utf8"),
+    readFile(new URL("../.gitignore", import.meta.url), "utf8"),
   ]);
 
-  assert.deepEqual(files.sort(), ["SkeletonPreview.tsx", "preview.css"]);
-  assert.match(preview, /from "react-loading-skeleton"/);
-  assert.match(preview, /baseColor="#eceae7"/);
-  assert.match(preview, /highlightColor="#f9f8f6"/);
-  assert.match(preview, /duration=\{2\.8\}/);
-  assert.match(preview, /sites-skeleton-search-placeholder/);
-  assert.match(packageJson, /"react-loading-skeleton": "3\.5\.0"/);
+  assert.match(page, /fetch\("\/api\/agent"/);
+  assert.match(page, /applyAgentFilters/);
+  assert.match(route, /from "cloudflare:workers"/);
+  assert.match(route, /https:\/\/openrouter\.ai\/api\/v1\/chat\/completions/);
+  assert.match(route, /prepare_hotel_search/);
+  assert.match(route, /hotelName/);
+  assert.match(route, /maximum: 10000/);
+  assert.match(route, /runtimeEnv\.OPENROUTER_API_KEY/);
+  assert.match(css, /\.ai-panel\s*\{[^}]*position:\s*fixed/s);
+  assert.match(envExample, /^OPENROUTER_API_KEY=$/m);
+  assert.match(gitignore, /^\.env\*$/m);
+  assert.doesNotMatch(page, /sk-or-v1-/);
+  assert.doesNotMatch(route, /sk-or-v1-/);
+});
 
-  const shellIndex = preview.indexOf('className="sites-skeleton-shell"');
-  const statusIndex = preview.indexOf('className="sites-skeleton-status"');
-  assert.ok(shellIndex >= 0 && statusIndex > shellIndex);
-  assert.match(css, /position:\s*fixed/);
-  assert.match(css, /inset:\s*0/);
-  assert.match(css, /opacity:\s*0\.52/);
-  assert.match(css, /prefers-reduced-motion:\s*reduce/);
-  assert.doesNotMatch(css, /#020617|canvas|pets|progress/i);
-  assert.doesNotMatch(
-    preview,
-    /loading-spinner|status-mark|status-progress|canvas|cookie|random/i,
-  );
+test("keeps SearchAPI credentials server-side", async () => {
+  const [page, route, envExample, gitignore] = await Promise.all([
+    readFile(new URL("../app/page.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/hotels/search/route.ts", import.meta.url), "utf8"),
+    readFile(new URL("../.env.example", import.meta.url), "utf8"),
+    readFile(new URL("../.gitignore", import.meta.url), "utf8"),
+  ]);
 
-  assert.match(page, /export const metadata:\s*Metadata/);
-  assert.match(page, /"codex-preview": "development"/);
-  assert.match(page, /<SkeletonPreview \/>/);
-  assert.match(layout, /title:\s*"Starter Project"/);
-  assert.doesNotMatch(layout, /codex-preview|_sites-preview|themeColor|\bViewport\b/);
-  assert.doesNotMatch(css, /(^|\s)(html|body)\s*\{/m);
-
-  await assert.rejects(
-    access(new URL("public/_sites-preview", templateRoot)),
-  );
+  assert.match(page, /fetch\(`\/api\/hotels\/search/);
+  assert.match(page, /showMore: "Показать ещё"/);
+  assert.match(page, /loadMoreOffers/);
+  assert.match(page, /movePhoto/);
+  assert.match(page, /photo-arrow/);
+  assert.match(route, /https:\/\/www\.searchapi\.io\/api\/v1\/search/);
+  assert.match(route, /runtimeEnv\.SEARCHAPI_KEY/);
+  assert.match(route, /Authorization: `Bearer \$\{apiKey\}`/);
+  assert.match(route, /special_offers/);
+  assert.match(route, /price_max/);
+  assert.match(route, /next_page_token/);
+  assert.match(route, /turkeySearchScopes/);
+  assert.match(route, /scopeIndex/);
+  assert.match(route, /images,/);
+  assert.doesNotMatch(route, /engine: "google_hotels_property"/);
+  assert.match(route, /hotelName/);
+  assert.match(envExample, /^SEARCHAPI_KEY=$/m);
+  assert.match(gitignore, /^\.env\*$/m);
+  assert.doesNotMatch(page, /SEARCHAPI_KEY/);
 });

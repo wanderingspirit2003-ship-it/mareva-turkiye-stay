@@ -1,12 +1,24 @@
 import { env } from "cloudflare:workers";
 
 const allowedEvents = new Set(["visit", "search", "outbound"]);
+let schemaReady = false;
+
+async function ensureAnalyticsSchema() {
+  if (schemaReady) return;
+  await env.DB.batch([
+    env.DB.prepare("CREATE TABLE IF NOT EXISTS analytics_events (id integer PRIMARY KEY AUTOINCREMENT NOT NULL, event_type text NOT NULL, destination text, session_id text, created_at integer DEFAULT 0 NOT NULL)"),
+    env.DB.prepare("CREATE INDEX IF NOT EXISTS idx_analytics_events_type_created ON analytics_events (event_type, created_at)"),
+    env.DB.prepare("CREATE INDEX IF NOT EXISTS idx_analytics_events_destination ON analytics_events (destination)"),
+  ]);
+  schemaReady = true;
+}
 
 export async function POST(request: Request) {
   const body = await request.json() as { eventType?: string; destination?: string; sessionId?: string };
   if (!body.eventType || !allowedEvents.has(body.eventType)) {
     return Response.json({ error: "INVALID_EVENT" }, { status: 400 });
   }
+  await ensureAnalyticsSchema();
   await env.DB.prepare(
     "INSERT INTO analytics_events (event_type, destination, session_id, created_at) VALUES (?, ?, ?, unixepoch())"
   ).bind(body.eventType, body.destination || null, body.sessionId || null).run();
@@ -14,6 +26,7 @@ export async function POST(request: Request) {
 }
 
 export async function GET() {
+  await ensureAnalyticsSchema();
   const totals = await env.DB.prepare(`
     SELECT
       SUM(CASE WHEN event_type = 'visit' THEN 1 ELSE 0 END) AS visits,

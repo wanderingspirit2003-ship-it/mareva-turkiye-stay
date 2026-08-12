@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 
 type Stay = {
   id: number | string;
@@ -16,6 +16,7 @@ type Stay = {
   price: number;
   oldPrice: number;
   image: string;
+  images?: string[];
   tags: string[];
   feature: string;
   distance: string;
@@ -202,10 +203,37 @@ const stays: Stay[] = [
 const destinations = [
   "Вся Турция", "Анталья", "Аланья", "Белек", "Сиде", "Кемер", "Бодрум", "Мармарис", "Фетхие",
   "Олюдениз", "Каш", "Кушадасы", "Чешме", "Дидим", "Даламан", "Сарыгерме", "Измир", "Стамбул", "Каппадокия",
-];
+].filter((item) => item === "Вся Турция" || stays.some((stay) => stay.city === item));
 
 type Language = "ru" | "en" | "tr";
-type HistoryItem = { id: number; kind: "search" | "booking"; destination: string; dates: string; guests: number };
+type HistoryItem = { id: number | string; kind: "search" | "booking"; destination: string; dates: string; guests: number };
+type AgentFilters = {
+  destination?: string;
+  hotelName?: string;
+  checkIn?: string;
+  checkOut?: string;
+  guests?: number;
+  propertyType?: "Все варианты" | "Отель" | "Апарт-отель" | "Вилла";
+  stars?: 0 | 3 | 4 | 5;
+  maxPrice?: number;
+  sizeRange?: "any" | "up-to-20" | "20-30" | "30-40" | "over-40";
+  mealPlan?: "any" | "no-meals" | "breakfast" | "half-board" | "full-board" | "all-inclusive";
+};
+type AgentMessage = { id: string; role: "user" | "assistant"; text: string; filters?: AgentFilters };
+type SearchOverrides = { destination?: string; hotelName?: string; checkIn?: string; checkOut?: string; guests?: number; maxPrice?: number; language?: Language };
+type SearchCursor = { scopeIndex?: number; pageToken?: string; offset: number };
+type SpeechRecognitionLike = {
+  lang: string;
+  continuous: boolean;
+  interimResults: boolean;
+  onstart: (() => void) | null;
+  onend: (() => void) | null;
+  onerror: ((event: { error?: string }) => void) | null;
+  onresult: ((event: { results: ArrayLike<{ 0: { transcript: string } }> }) => void) | null;
+  start: () => void;
+  stop: () => void;
+};
+type SpeechRecognitionConstructor = new () => SpeechRecognitionLike;
 
 const destinationNames: Record<Language, Record<string, string>> = {
   ru: Object.fromEntries(destinations.map((item) => [item, item])),
@@ -227,59 +255,62 @@ const translations = {
   ru: {
     findStay: "Найти место для отдыха", how: "Как это работает", favorites: "Избранное", login: "Войти", register: "Регистрация", account: "Аккаунт",
     eyebrow: "Независимый поиск по Турции", heroA: "Турция.", heroB: "Без переплаты.",
-    heroCopy: "Собираем предложения отелей, апарт-отелей и вилл и показываем только те, где тот же отдых стоит дешевле официальной цены.", heroPromise: "Экономим ваши деньги. Качество отдыха неизменно.",
-    where: "Куда", checkIn: "Заезд", checkOut: "Выезд", guests: "Гости", find: "Найти", searching: "Ищем…", popular: "Популярно:",
-    selectDates: "Выберите даты", chooseArrival: "Сначала выберите дату заезда", chooseDeparture: "Теперь выберите дату выезда", close: "Готово", year: "Год", previousMonth: "Предыдущий месяц", nextMonth: "Следующий месяц",
-    benefits: [["Цена со скидкой", "Ниже официальной на те же даты"], ["Один объект — одна карточка", "Без дублей в выдаче"], ["Прямой переход", "Бронирование у источника"], ["Только экономия", "Полные цены не показываем"]],
+    heroCopy: "Собираем предложения отелей, апарт-отелей и вилл и показываем только те, где цена со скидкой ниже цены до скидки.", heroPromise: "Экономим ваши деньги. Качество отдыха неизменно.",
+    where: "Куда", hotelSearch: "Название отеля", hotelPlaceholder: "Любой отель", checkIn: "Заезд", checkOut: "Выезд", guests: "Гости", find: "Найти", searching: "Ищем…", searchTitle: "Ищем лучшие предложения", searchDetail: "Проверяем реальные скидки и цены на выбранные даты", popular: "Популярно:",
+    selectDates: "Выберите даты", chooseArrival: "Сначала выберите дату заезда", chooseDeparture: "Теперь выберите дату выезда", close: "Закрыть", clearDates: "Очистить", dateNext: "Далее", year: "Год", previousMonth: "Предыдущий месяц", nextMonth: "Следующий месяц",
+    benefits: [["Цена со скидкой", "Ниже цены без скидки на те же даты"], ["Один объект — одна карточка", "Без дублей в выдаче"], ["Прямой переход", "Бронирование у источника"], ["Только экономия", "Предложения без скидки не показываем"]],
     picked: "Подобрали для вас", allTurkey: "Отдых по всей Турции", housing: "Отдых", variants: "вариантов в прототипе", filters: "Фильтры", reset: "Сбросить",
     sort: "Сортировка", sortDeal: "Выгодные сначала", sortCheap: "Сначала дешевле", sortRating: "По рейтингу", type: "Тип жилья", category: "Категория", all: "Все",
     allTypes: "Все варианты", hotel: "Отель", apart: "Апарт-отель", villa: "Вилла", area: "Площадь номера", anyArea: "Любая площадь", up20: "До 20 м²", from20: "От 20 до 30 м²", from30: "От 30 до 40 м²", over40: "Выше 40 м²",
-    price: "Цена за 6 ночей", upTo: "до", meal: "Питание", anyMeal: "Любое питание", noMeal: "Без питания", breakfast: "Завтрак включён", halfBoard: "Полупансион · завтрак и ужин", fullBoard: "Полный пансион · завтрак, обед и ужин", allInclusive: "Всё включено", webTitle: "Поиск без договоров", webText: "Открытые страницы и поисковые ссылки. Цена всегда перепроверяется на сайте источника.",
-    excellent: "Превосходно", reviews: "отзывов", upToGuests: "до", guestWord: "гостей", demoPrice: "за 6 ночей · демо-цена", checkWeb: "Проверить в интернете",
-    requestReady: "Живой поиск завершён", requestText: "Показаны только предложения дешевле официальной цены на те же даты. Полные цены без скидки исключены.", noMatches: "Подтверждённых скидок пока нет", expand: "Попробуйте другие даты, направление или условия. Полные цены мы намеренно не показываем.", showTurkey: "Искать по всей Турции", deal: "к официальной цене", startLive: "Задайте даты и запустите живой поиск скидок", sourceMissing: "Для живого поиска требуется подключить технический ключ источника цен.", sizeAtSource: "Площадь у источника", officialPrice: "официальная цена", checkedNow: "проверено сейчас",
+    price: "Максимальная цена за сутки", upTo: "до", meal: "Питание", anyMeal: "Любое питание", noMeal: "Без питания", breakfast: "Завтрак включён", halfBoard: "Полупансион · завтрак и ужин", fullBoard: "Полный пансион · завтрак, обед и ужин", allInclusive: "Всё включено", webTitle: "Поиск без договоров", webText: "Открытые страницы и поисковые ссылки. Цена всегда перепроверяется на сайте источника.",
+    excellent: "Превосходно", reviews: "отзывов", upToGuests: "до", guestWord: "гостей", demoPrice: "за 6 ночей · демо-цена", perNight: "за сутки", totalStay: "за весь период", checkWeb: "Проверить в интернете",
+    requestReady: "Живой поиск завершён", requestText: "Показаны только предложения со скидкой на выбранные даты. Варианты без скидки исключены.", noMatches: "Подтверждённых скидок пока нет", expand: "Попробуйте другие даты, направление или условия. Предложения без скидки мы намеренно не показываем.", showTurkey: "Искать по всей Турции", showMore: "Показать ещё", loadingMore: "Загружаем ещё…", previousPhoto: "Предыдущая фотография", nextPhoto: "Следующая фотография", deal: "к цене до скидки", startLive: "Задайте даты и запустите живой поиск скидок", sourceMissing: "Для живого поиска требуется подключить технический ключ источника цен.", sizeAtSource: "Площадь у источника", officialPrice: "цена до скидки", checkedNow: "проверено сейчас",
     howKicker: "Как работает Mareva", howA: "Мы ищем.", howB: "Вы выбираете.", howCopy: "Портал не принимает оплату и не скрывает источник предложения. На первом этапе он помогает сформировать точный запрос и проверить вариант в открытом интернете.",
     steps: [["Задайте условия", "Направление, даты, гости, тип жилья, площадь и бюджет."], ["Сравните варианты", "Единый формат карточек помогает быстро убрать неподходящее."], ["Проверьте цену", "Откроется свежая поисковая выдача с названием и городом объекта."], ["Бронируйте у источника", "Оплата и подтверждение происходят на выбранном внешнем сайте."]],
     roadmapKicker: "Развитие продукта", roadmapA: "Сегодня — веб-поиск.", roadmapB: "Завтра — единая цена.", roadmap: [["Сейчас", "Открытый веб-поиск", "Прямые ссылки, официальные сайты, ручная перепроверка."], ["Этап 2", "Поисковые API", "Автоматический сбор доступных страниц и обнаружение объектов."], ["Этап 3", "Партнёрские цены", "Наличие, точная стоимость и сравнение источников внутри портала."]], footerText: "Независимый поиск отдыха в Турции. Прототип MVP.", catalog: "Каталог", howSearch: "Как мы ищем",
     profileTitle: "Мой аккаунт", recent: "10 последних действий", localOnly: "Демо-кабинет: история хранится только в этом браузере.", search: "Поиск", booking: "Бронь", repeat: "Повторить",
     loginTitle: "Вход в Mareva", registerTitle: "Создать аккаунт", email: "Электронная почта", password: "Пароль", name: "Имя", patronymic: "Отчество", optional: "необязательно", continue: "Продолжить", create: "Создать аккаунт", authNote: "Демо-кабинет: достаточно имени, почта необязательна.", logout: "Выйти", favoritesTitle: "Избранное в аккаунте", noFavorites: "Сохраняйте понравившиеся варианты сердечком.", guestNote: "Искать и бронировать можно без регистрации. Гостевое избранное хранится только в текущей сессии.", keepFavorites: "Сохранить избранное в аккаунте",
+    aiName: "Mareva AI", aiBadge: "OpenRouter", aiIntro: "Опишите отдых своими словами — я заполню фильтры и подготовлю поиск скидок.", aiPlaceholder: "Например: вилла в Бодруме на 6 гостей…", aiSend: "Отправить", aiThinking: "Подбираю условия…", aiApply: "Применить и найти", aiApplied: "Условия применены — запускаю поиск скидок.", aiError: "Не удалось связаться с AI-агентом. Попробуйте ещё раз.", aiClose: "Закрыть помощника", voiceSearch: "Сказать условия голосом", voiceListening: "Говорите — я слушаю", voiceUnavailable: "Голосовой ввод недоступен в этом браузере. Можно написать запрос помощнику.", hotelNameLabel: "Отель", aiExamples: ["Пятизвёздочный отель в Сиде для двоих", "Вилла в Бодруме на 6 гостей", "Анталья, всё включено, до 1000 евро"],
   },
   en: {
     findStay: "Find a stay", how: "How it works", favorites: "Favorites", login: "Sign in", register: "Register", account: "Account",
     eyebrow: "Independent search across Turkey", heroA: "Turkey.", heroB: "Without overpaying.",
-    heroCopy: "We find live deals below the official price. You save money while the quality of your holiday stays the same.", heroPromise: "Save money. Not memories.",
-    where: "Where", checkIn: "Check-in", checkOut: "Check-out", guests: "Guests", find: "Search", searching: "Searching…", popular: "Popular:",
-    selectDates: "Select dates", chooseArrival: "Choose your check-in date first", chooseDeparture: "Now choose your check-out date", close: "Done", year: "Year", previousMonth: "Previous month", nextMonth: "Next month",
-    benefits: [["Discounted price", "Below the official price for the same dates"], ["One property, one card", "No duplicates"], ["Direct handoff", "Book with the source"], ["Savings only", "Full-price stays are hidden"]],
+    heroCopy: "We find live deals priced below the regular price. You save money while the quality of your holiday stays the same.", heroPromise: "Save money. Not memories.",
+    where: "Where", hotelSearch: "Hotel name", hotelPlaceholder: "Any hotel", checkIn: "Check-in", checkOut: "Check-out", guests: "Guests", find: "Search", searching: "Searching…", searchTitle: "Searching for the best deals", searchDetail: "Checking live discounts and prices for your dates", popular: "Popular:",
+    selectDates: "Select dates", chooseArrival: "Choose your check-in date first", chooseDeparture: "Now choose your check-out date", close: "Close", clearDates: "Clear", dateNext: "Continue", year: "Year", previousMonth: "Previous month", nextMonth: "Next month",
+    benefits: [["Discounted price", "Below the regular price for the same dates"], ["One property, one card", "No duplicates"], ["Direct handoff", "Book with the source"], ["Savings only", "Offers without a discount are hidden"]],
     picked: "Selected for you", allTurkey: "Stays across Turkey", housing: "Stays", variants: "prototype options", filters: "Filters", reset: "Reset",
     sort: "Sort", sortDeal: "Best deals first", sortCheap: "Lowest price", sortRating: "Highest rating", type: "Property type", category: "Category", all: "All",
     allTypes: "All properties", hotel: "Hotel", apart: "Aparthotel", villa: "Villa", area: "Room size", anyArea: "Any size", up20: "Up to 20 m²", from20: "20 to 30 m²", from30: "30 to 40 m²", over40: "Over 40 m²",
-    price: "Price for 6 nights", upTo: "up to", meal: "Meal plan", anyMeal: "Any meal plan", noMeal: "No meals", breakfast: "Breakfast included", halfBoard: "Half board · breakfast and dinner", fullBoard: "Full board · breakfast, lunch and dinner", allInclusive: "All inclusive", webTitle: "Open web search", webText: "Public pages and search links. Always verify the final price with the source.",
-    excellent: "Excellent", reviews: "reviews", upToGuests: "up to", guestWord: "guests", demoPrice: "6 nights · demo price", checkWeb: "Check on the web",
-    requestReady: "Live search complete", requestText: "Only offers below the official price for the same dates are shown. Full-price stays are excluded.", noMatches: "No verified discounts yet", expand: "Try other dates, a wider destination or different preferences. We intentionally hide full-price stays.", showTurkey: "Search all Turkey", deal: "below official price", startLive: "Choose dates and run a live discount search", sourceMissing: "Live search needs a technical price-source key.", sizeAtSource: "Room size at source", officialPrice: "official price", checkedNow: "checked now",
+    price: "Maximum price per night", upTo: "up to", meal: "Meal plan", anyMeal: "Any meal plan", noMeal: "No meals", breakfast: "Breakfast included", halfBoard: "Half board · breakfast and dinner", fullBoard: "Full board · breakfast, lunch and dinner", allInclusive: "All inclusive", webTitle: "Open web search", webText: "Public pages and search links. Always verify the final price with the source.",
+    excellent: "Excellent", reviews: "reviews", upToGuests: "up to", guestWord: "guests", demoPrice: "6 nights · demo price", perNight: "per night", totalStay: "total stay", checkWeb: "Check on the web",
+    requestReady: "Live search complete", requestText: "Only discounted offers for the selected dates are shown. Offers without a discount are excluded.", noMatches: "No verified discounts yet", expand: "Try other dates, a wider destination or different preferences. We intentionally hide offers without a discount.", showTurkey: "Search all Turkey", showMore: "Show more", loadingMore: "Loading more…", previousPhoto: "Previous photo", nextPhoto: "Next photo", deal: "below regular price", startLive: "Choose dates and run a live discount search", sourceMissing: "Live search needs a technical price-source key.", sizeAtSource: "Room size at source", officialPrice: "price before discount", checkedNow: "checked now",
     howKicker: "How Mareva works", howA: "We search.", howB: "You choose.", howCopy: "Mareva does not take payments or hide the offer source. At this stage it builds a precise request and helps you verify it on the open web.",
     steps: [["Set your preferences", "Destination, dates, guests, property type, room size and budget."], ["Compare options", "A consistent card format makes unsuitable stays easy to remove."], ["Check the price", "A fresh web search opens with the property name and city."], ["Book with the source", "Payment and confirmation happen on the external site you choose."]],
     roadmapKicker: "Product roadmap", roadmapA: "Today — web search.", roadmapB: "Tomorrow — one live price.", roadmap: [["Now", "Open web search", "Direct links, official websites and manual verification."], ["Stage 2", "Search APIs", "Automated discovery across permitted public pages."], ["Stage 3", "Partner pricing", "Availability, exact totals and source comparison inside Mareva."]], footerText: "Independent search for stays in Turkey. MVP prototype.", catalog: "Catalog", howSearch: "How we search",
     profileTitle: "My account", recent: "10 latest activities", localOnly: "Demo account: history is stored only in this browser.", search: "Search", booking: "Booking", repeat: "Repeat",
     loginTitle: "Sign in to Mareva", registerTitle: "Create an account", email: "Email", password: "Password", name: "Name", patronymic: "Middle name", optional: "optional", continue: "Continue", create: "Create account", authNote: "Demo account: a name is enough; email is optional.", logout: "Sign out", favoritesTitle: "Account favorites", noFavorites: "Save places you like with the heart button.", guestNote: "You can search and book without registering. Guest favorites last for this session only.", keepFavorites: "Save favorites to an account",
+    aiName: "Mareva AI", aiBadge: "OpenRouter", aiIntro: "Describe your holiday naturally — I’ll fill the filters and prepare a discount search.", aiPlaceholder: "For example: a Bodrum villa for 6 guests…", aiSend: "Send", aiThinking: "Preparing preferences…", aiApply: "Apply and search", aiApplied: "Preferences applied — starting the discount search.", aiError: "The AI assistant could not respond. Please try again.", aiClose: "Close assistant", voiceSearch: "Describe your trip by voice", voiceListening: "Speak now — I’m listening", voiceUnavailable: "Voice input is unavailable in this browser. You can type your request to the assistant.", hotelNameLabel: "Hotel", aiExamples: ["Five-star hotel in Side for two", "A Bodrum villa for 6 guests", "Antalya, all inclusive, under €1,000"],
   },
   tr: {
     findStay: "Konaklama bul", how: "Nasıl çalışır", favorites: "Favoriler", login: "Giriş", register: "Kayıt ol", account: "Hesabım",
     eyebrow: "Türkiye genelinde bağımsız arama", heroA: "Türkiye.", heroB: "Fazla ödemeden.",
     heroCopy: "Resmi fiyattan daha düşük güncel fırsatları buluruz. Siz tasarruf ederken tatil kalitesi değişmez.", heroPromise: "Paradan tasarruf edin. Anılardan değil.",
-    where: "Nereye", checkIn: "Giriş", checkOut: "Çıkış", guests: "Misafir", find: "Ara", searching: "Aranıyor…", popular: "Popüler:",
-    selectDates: "Tarihleri seçin", chooseArrival: "Önce giriş tarihini seçin", chooseDeparture: "Şimdi çıkış tarihini seçin", close: "Tamam", year: "Yıl", previousMonth: "Önceki ay", nextMonth: "Sonraki ay",
+    where: "Nereye", hotelSearch: "Otel adı", hotelPlaceholder: "Herhangi bir otel", checkIn: "Giriş", checkOut: "Çıkış", guests: "Misafir", find: "Ara", searching: "Aranıyor…", searchTitle: "En iyi fırsatlar aranıyor", searchDetail: "Seçtiğiniz tarihler için güncel indirimler ve fiyatlar kontrol ediliyor", popular: "Popüler:",
+    selectDates: "Tarihleri seçin", chooseArrival: "Önce giriş tarihini seçin", chooseDeparture: "Şimdi çıkış tarihini seçin", close: "Kapat", clearDates: "Temizle", dateNext: "Devam", year: "Yıl", previousMonth: "Önceki ay", nextMonth: "Sonraki ay",
     benefits: [["İndirimli fiyat", "Aynı tarihlerde resmi fiyattan düşük"], ["Bir tesis, bir kart", "Tekrarsız sonuçlar"], ["Doğrudan yönlendirme", "Kaynakta rezervasyon"], ["Yalnızca tasarruf", "Tam fiyatlı tesisler gizlenir"]],
     picked: "Sizin için seçtik", allTurkey: "Türkiye genelinde konaklama", housing: "Konaklama", variants: "prototip seçeneği", filters: "Filtreler", reset: "Sıfırla",
     sort: "Sıralama", sortDeal: "En iyi fırsatlar", sortCheap: "En düşük fiyat", sortRating: "En yüksek puan", type: "Konaklama türü", category: "Kategori", all: "Tümü",
     allTypes: "Tüm seçenekler", hotel: "Otel", apart: "Apart otel", villa: "Villa", area: "Oda büyüklüğü", anyArea: "Tüm büyüklükler", up20: "20 m²'ye kadar", from20: "20–30 m²", from30: "30–40 m²", over40: "40 m² üzeri",
-    price: "6 gecelik fiyat", upTo: "en fazla", meal: "Yemek planı", anyMeal: "Tüm yemek planları", noMeal: "Yemeksiz", breakfast: "Kahvaltı dahil", halfBoard: "Yarım pansiyon · kahvaltı ve akşam yemeği", fullBoard: "Tam pansiyon · kahvaltı, öğle ve akşam yemeği", allInclusive: "Her şey dahil", webTitle: "Açık web araması", webText: "Herkese açık sayfalar ve arama bağlantıları. Son fiyatı her zaman kaynakta doğrulayın.",
-    excellent: "Mükemmel", reviews: "yorum", upToGuests: "en fazla", guestWord: "misafir", demoPrice: "6 gece · demo fiyat", checkWeb: "Web'de kontrol et",
-    requestReady: "Canlı arama tamamlandı", requestText: "Yalnızca aynı tarihlerde resmi fiyattan daha ucuz teklifler gösterilir. Tam fiyatlı tesisler gizlenir.", noMatches: "Doğrulanmış indirim bulunamadı", expand: "Farklı tarihler, konum veya koşullar deneyin. Tam fiyatlı tesisleri bilerek göstermiyoruz.", showTurkey: "Tüm Türkiye'de ara", deal: "resmi fiyata göre", startLive: "Tarihleri seçip canlı indirim araması başlatın", sourceMissing: "Canlı arama için teknik fiyat kaynağı anahtarı gerekir.", sizeAtSource: "Oda büyüklüğü kaynakta", officialPrice: "resmi fiyat", checkedNow: "şimdi kontrol edildi",
+    price: "Gecelik maksimum fiyat", upTo: "en fazla", meal: "Yemek planı", anyMeal: "Tüm yemek planları", noMeal: "Yemeksiz", breakfast: "Kahvaltı dahil", halfBoard: "Yarım pansiyon · kahvaltı ve akşam yemeği", fullBoard: "Tam pansiyon · kahvaltı, öğle ve akşam yemeği", allInclusive: "Her şey dahil", webTitle: "Açık web araması", webText: "Herkese açık sayfalar ve arama bağlantıları. Son fiyatı her zaman kaynakta doğrulayın.",
+    excellent: "Mükemmel", reviews: "yorum", upToGuests: "en fazla", guestWord: "misafir", demoPrice: "6 gece · demo fiyat", perNight: "gecelik", totalStay: "toplam konaklama", checkWeb: "Web'de kontrol et",
+    requestReady: "Canlı arama tamamlandı", requestText: "Yalnızca seçilen tarihlerde indirimli teklifler gösterilir. İndirimsiz seçenekler gizlenir.", noMatches: "Doğrulanmış indirim bulunamadı", expand: "Farklı tarihler, konum veya koşullar deneyin. İndirimsiz seçenekleri bilerek göstermiyoruz.", showTurkey: "Tüm Türkiye'de ara", showMore: "Daha fazla göster", loadingMore: "Daha fazlası yükleniyor…", previousPhoto: "Önceki fotoğraf", nextPhoto: "Sonraki fotoğraf", deal: "normal fiyata göre", startLive: "Tarihleri seçip canlı indirim araması başlatın", sourceMissing: "Canlı arama için teknik fiyat kaynağı anahtarı gerekir.", sizeAtSource: "Oda büyüklüğü kaynakta", officialPrice: "indirim öncesi fiyat", checkedNow: "şimdi kontrol edildi",
     howKicker: "Mareva nasıl çalışır", howA: "Biz ararız.", howB: "Siz seçersiniz.", howCopy: "Mareva ödeme almaz ve teklif kaynağını gizlemez. İlk aşamada kesin bir arama oluşturur ve açık web'de doğrulamanıza yardımcı olur.",
     steps: [["Koşulları belirleyin", "Konum, tarihler, misafirler, konaklama türü, oda büyüklüğü ve bütçe."], ["Seçenekleri karşılaştırın", "Tek kart düzeni uygun olmayan seçenekleri kolayca elemenizi sağlar."], ["Fiyatı kontrol edin", "Tesis adı ve şehirle güncel web araması açılır."], ["Kaynakta rezervasyon yapın", "Ödeme ve onay seçtiğiniz dış sitede gerçekleşir."]],
     roadmapKicker: "Ürün yol haritası", roadmapA: "Bugün — web araması.", roadmapB: "Yarın — tek güncel fiyat.", roadmap: [["Şimdi", "Açık web araması", "Doğrudan bağlantılar, resmi siteler ve manuel kontrol."], ["Aşama 2", "Arama API'leri", "İzin verilen sayfalarda otomatik tesis keşfi."], ["Aşama 3", "Ortak fiyatları", "Mareva içinde müsaitlik, toplam fiyat ve kaynak karşılaştırması."]], footerText: "Türkiye'de bağımsız konaklama araması. MVP prototipi.", catalog: "Katalog", howSearch: "Nasıl ararız",
     profileTitle: "Hesabım", recent: "Son 10 işlem", localOnly: "Demo hesap: geçmiş yalnızca bu tarayıcıda saklanır.", search: "Arama", booking: "Rezervasyon", repeat: "Tekrarla",
     loginTitle: "Mareva'ya giriş", registerTitle: "Hesap oluştur", email: "E-posta", password: "Şifre", name: "Ad", patronymic: "İkinci ad", optional: "isteğe bağlı", continue: "Devam et", create: "Hesap oluştur", authNote: "Demo hesap: ad yeterlidir; e-posta isteğe bağlıdır.", logout: "Çıkış", favoritesTitle: "Hesaptaki favoriler", noFavorites: "Beğendiğiniz yerleri kalp düğmesiyle kaydedin.", guestNote: "Kayıt olmadan arama ve rezervasyon yapabilirsiniz. Misafir favorileri yalnızca bu oturumda saklanır.", keepFavorites: "Favorileri hesaba kaydet",
+    aiName: "Mareva AI", aiBadge: "OpenRouter", aiIntro: "Tatilinizi doğal biçimde anlatın; filtreleri doldurup indirim aramasını hazırlayayım.", aiPlaceholder: "Örneğin: Bodrum'da 6 kişilik villa…", aiSend: "Gönder", aiThinking: "Tercihler hazırlanıyor…", aiApply: "Uygula ve ara", aiApplied: "Tercihler uygulandı — indirim araması başlıyor.", aiError: "AI asistanına ulaşılamadı. Lütfen tekrar deneyin.", aiClose: "Asistanı kapat", voiceSearch: "Koşulları sesle söyle", voiceListening: "Konuşun — dinliyorum", voiceUnavailable: "Bu tarayıcıda sesli giriş kullanılamıyor. İsteğinizi asistana yazabilirsiniz.", hotelNameLabel: "Otel", aiExamples: ["Side'de iki kişilik beş yıldızlı otel", "Bodrum'da 6 kişilik villa", "Antalya, her şey dahil, 1000 € altı"],
   },
 } as const;
 
@@ -325,8 +356,8 @@ function CalendarMonth({ month, language, checkIn, checkOut, onPick }: { month: 
   });
   const weekdayBase = new Date(2026, 7, 10);
   const weekdays = Array.from({ length: 7 }, (_, index) => new Intl.DateTimeFormat(locale, { weekday: "long" }).format(new Date(weekdayBase.getFullYear(), weekdayBase.getMonth(), weekdayBase.getDate() + index)));
-  const start = parseIso(checkIn).getTime();
-  const end = parseIso(checkOut).getTime();
+  const start = checkIn ? parseIso(checkIn).getTime() : Number.NaN;
+  const end = checkOut ? parseIso(checkOut).getTime() : Number.NaN;
   const monthTitle = language === "ru"
     ? `${new Intl.DateTimeFormat(locale, { month: "long" }).format(month)} ${year} год`
     : new Intl.DateTimeFormat(locale, { month: "long", year: "numeric" }).format(month);
@@ -368,19 +399,23 @@ async function trackActivity(eventType: "visit" | "search" | "outbound", destina
 export default function Home() {
   const [language, setLanguage] = useState<Language>("ru");
   const [destination, setDestination] = useState("Вся Турция");
+  const [hotelName, setHotelName] = useState("");
   const [checkIn, setCheckIn] = useState("2026-09-14");
   const [checkOut, setCheckOut] = useState("2026-09-20");
   const [guests, setGuests] = useState(2);
   const [type, setType] = useState("Все варианты");
   const [stars, setStars] = useState(0);
-  const [maxPrice, setMaxPrice] = useState(1400);
+  const [maxPrice, setMaxPrice] = useState(10000);
   const [sizeRange, setSizeRange] = useState("any");
   const [mealPlan, setMealPlan] = useState("any");
   const [sort, setSort] = useState("Выгодные сначала");
   const [saved, setSaved] = useState<Array<number | string>>([]);
   const [savedStays, setSavedStays] = useState<Stay[]>([]);
+  const [photoIndices, setPhotoIndices] = useState<Record<string, number>>({});
   const [searched, setSearched] = useState(false);
   const [searching, setSearching] = useState(false);
+  const [searchingMore, setSearchingMore] = useState(false);
+  const [searchCursor, setSearchCursor] = useState<SearchCursor | null>(null);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [datePicker, setDatePicker] = useState<"checkIn" | "checkOut" | null>(null);
   const [calendarMonth, setCalendarMonth] = useState(new Date(2026, 8, 1));
@@ -391,14 +426,29 @@ export default function Home() {
   const [history, setHistory] = useState<HistoryItem[]>(initialHistory);
   const [liveStays, setLiveStays] = useState<Stay[]>([]);
   const [searchError, setSearchError] = useState("");
+  const [agentOpen, setAgentOpen] = useState(false);
+  const [agentInput, setAgentInput] = useState("");
+  const [agentLoading, setAgentLoading] = useState(false);
+  const [agentMessages, setAgentMessages] = useState<AgentMessage[]>([]);
+  const [voiceListening, setVoiceListening] = useState(false);
+  const [voiceError, setVoiceError] = useState("");
+  const voiceRecognition = useRef<SpeechRecognitionLike | null>(null);
+  const lastSearchRequest = useRef<SearchOverrides>({});
   const t = translations[language];
   const locale = language === "ru" ? "ru-RU" : language === "tr" ? "tr-TR" : "en-GB";
+  const tripNights = useMemo(() => {
+    if (!checkIn || !checkOut) return 1;
+    const value = Math.round((parseIso(checkOut).getTime() - parseIso(checkIn).getTime()) / 86400000);
+    return Math.max(1, value);
+  }, [checkIn, checkOut]);
 
   useEffect(() => {
     const storedHistory = window.localStorage.getItem("mareva-history");
     const storedUser = window.localStorage.getItem("mareva-demo-user");
     const guestHistory = window.sessionStorage.getItem("mareva-guest-history");
     if (storedUser) {
+      // Restoring browser-owned account state is intentionally a one-time mount action.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setSignedIn(true);
       try {
         const user = JSON.parse(storedUser);
@@ -434,45 +484,185 @@ export default function Home() {
         (sizeRange === "30-40" && stay.roomSize !== null && stay.roomSize >= 30 && stay.roomSize <= 40) ||
         (sizeRange === "over-40" && stay.roomSize !== null && stay.roomSize > 40);
       const mealOk = mealPlan === "any" || mealPlanOf(stay) === mealPlan;
-      return cityOk && typeOk && stay.stars >= stars && stay.price <= maxPrice && sizeOk && mealOk && stay.guests >= guests;
+      return cityOk && typeOk && stay.stars >= stars && stay.price / tripNights <= maxPrice && sizeOk && mealOk && stay.guests >= guests;
     });
     if (sort === "Сначала дешевле") items = [...items].sort((a, b) => a.price - b.price);
     if (sort === "По рейтингу") items = [...items].sort((a, b) => b.score - a.score);
     if (sort === "Выгодные сначала") items = [...items].sort((a, b) => (b.oldPrice - b.price) / b.oldPrice - (a.oldPrice - a.price) / a.oldPrice);
     return items;
-  }, [destination, guests, liveStays, maxPrice, mealPlan, sizeRange, sort, stars, type]);
+  }, [destination, guests, liveStays, maxPrice, mealPlan, sizeRange, sort, stars, tripNights, type]);
 
-  async function runSearch() {
-    setSearching(true);
+  async function runSearch(overrides: SearchOverrides = {}, append = false, cursor: SearchCursor | null = null) {
+    const searchDestination = overrides.destination ?? destination;
+    const searchHotelName = overrides.hotelName ?? hotelName;
+    const searchCheckIn = overrides.checkIn ?? checkIn;
+    const searchCheckOut = overrides.checkOut ?? checkOut;
+    const searchGuests = overrides.guests ?? guests;
+    const searchMaxPrice = overrides.maxPrice ?? maxPrice;
+    const searchLanguage = overrides.language ?? language;
+    if (!searchCheckIn || !searchCheckOut) {
+      setDatePicker(searchCheckIn ? "checkOut" : "checkIn");
+      return;
+    }
+    if (append) setSearchingMore(true);
+    else setSearching(true);
     setSearchError("");
-    setSearched(false);
-    void trackActivity("search", destination);
+    if (!append) {
+      setSearched(false);
+      setSearchCursor(null);
+      setPhotoIndices({});
+      lastSearchRequest.current = { destination: searchDestination, hotelName: searchHotelName, checkIn: searchCheckIn, checkOut: searchCheckOut, guests: searchGuests, maxPrice: searchMaxPrice, language: searchLanguage };
+      void trackActivity("search", searchDestination);
+    }
     try {
-      const params = new URLSearchParams({ destination, checkIn, checkOut, guests: String(guests), language });
+      const params = new URLSearchParams({ destination: searchDestination, checkIn: searchCheckIn, checkOut: searchCheckOut, guests: String(searchGuests), maxPrice: String(searchMaxPrice), language: searchLanguage });
+      if (searchHotelName) params.set("hotelName", searchHotelName);
+      if (cursor?.pageToken) params.set("pageToken", cursor.pageToken);
+      if (cursor?.offset) params.set("offset", String(cursor.offset));
+      if (cursor?.scopeIndex) params.set("scopeIndex", String(cursor.scopeIndex));
       const response = await fetch(`/api/hotels/search?${params.toString()}`);
-      const payload = await response.json() as { offers?: Stay[]; error?: string; message?: string };
+      const payload = await response.json() as { offers?: Stay[]; nextCursor?: SearchCursor | null; error?: string; message?: string };
       if (!response.ok) throw new Error(payload.error === "SOURCE_NOT_CONFIGURED" ? t.sourceMissing : payload.message || t.noMatches);
-      setLiveStays(payload.offers || []);
-      const item: HistoryItem = {
-        id: Date.now(), kind: "search", destination,
-        dates: `${checkIn.split("-").reverse().slice(0, 2).join(".")}–${checkOut.split("-").reverse().join(".")}`,
-        guests,
-      };
-      setHistory((current) => {
-        const next = [item, ...current].slice(0, 10);
-        const storage = signedIn ? window.localStorage : window.sessionStorage;
-        storage.setItem(signedIn ? "mareva-history" : "mareva-guest-history", JSON.stringify(next));
-        return next;
-      });
+      const incoming = payload.offers || [];
+      setLiveStays((current) => append
+        ? Array.from(new Map([...current, ...incoming].map((stay) => [stay.id, stay])).values())
+        : incoming);
+      setSearchCursor(payload.nextCursor || null);
+      if (!append) {
+        const item: HistoryItem = {
+          id: crypto.randomUUID(), kind: "search", destination: searchDestination,
+          dates: `${searchCheckIn.split("-").reverse().slice(0, 2).join(".")}–${searchCheckOut.split("-").reverse().join(".")}`,
+          guests: searchGuests,
+        };
+        setHistory((current) => {
+          const next = [item, ...current].slice(0, 10);
+          const storage = signedIn ? window.localStorage : window.sessionStorage;
+          storage.setItem(signedIn ? "mareva-history" : "mareva-guest-history", JSON.stringify(next));
+          return next;
+        });
+      }
       setSearched(true);
-      document.getElementById("results")?.scrollIntoView({ behavior: "smooth", block: "start" });
+      if (!append) document.getElementById("results")?.scrollIntoView({ behavior: "smooth", block: "start" });
     } catch (error) {
-      setLiveStays([]);
+      if (!append) setLiveStays([]);
       setSearched(true);
       setSearchError(error instanceof Error ? error.message : t.noMatches);
     } finally {
-      setSearching(false);
+      if (append) setSearchingMore(false);
+      else setSearching(false);
     }
+  }
+
+  function loadMoreOffers() {
+    if (!searchCursor || searchingMore) return;
+    void runSearch(lastSearchRequest.current, true, searchCursor);
+  }
+
+  async function sendAgentMessage(message: string, autoApply = false) {
+    if (!message || agentLoading) return;
+    setAgentInput("");
+    setAgentMessages((current) => [...current, { id: crypto.randomUUID(), role: "user", text: message }]);
+    setAgentLoading(true);
+    try {
+      const response = await fetch("/api/agent", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          message,
+          language,
+          current: { destination, hotelName, checkIn, checkOut, guests, propertyType: type, stars, maxPrice, sizeRange, mealPlan },
+        }),
+      });
+      const payload = await response.json() as { reply?: string; filters?: AgentFilters; error?: string };
+      if (!response.ok) throw new Error(payload.error || "AGENT_ERROR");
+      setAgentMessages((current) => [...current, { id: crypto.randomUUID(), role: "assistant", text: payload.reply || t.aiIntro, filters: payload.filters || {} }]);
+      if (autoApply && payload.filters && Object.keys(payload.filters).length > 0) applyAgentFilters(payload.filters);
+    } catch {
+      setAgentMessages((current) => [...current, { id: crypto.randomUUID(), role: "assistant", text: t.aiError }]);
+    } finally {
+      setAgentLoading(false);
+    }
+  }
+
+  async function askAgent(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    await sendAgentMessage(agentInput.trim());
+  }
+
+  function startVoiceSearch() {
+    if (voiceListening) {
+      voiceRecognition.current?.stop();
+      return;
+    }
+    const speechWindow = window as typeof window & {
+      SpeechRecognition?: SpeechRecognitionConstructor;
+      webkitSpeechRecognition?: SpeechRecognitionConstructor;
+    };
+    const Recognition = speechWindow.SpeechRecognition || speechWindow.webkitSpeechRecognition;
+    if (!Recognition) {
+      setAgentOpen(true);
+      setVoiceError(t.voiceUnavailable);
+      return;
+    }
+
+    const recognition = new Recognition();
+    voiceRecognition.current = recognition;
+    recognition.lang = language === "ru" ? "ru-RU" : language === "tr" ? "tr-TR" : "en-US";
+    recognition.continuous = false;
+    recognition.interimResults = false;
+    recognition.onstart = () => {
+      setAgentOpen(true);
+      setVoiceError("");
+      setVoiceListening(true);
+    };
+    recognition.onresult = (event) => {
+      const transcript = event.results[0]?.[0]?.transcript?.trim() || "";
+      setAgentInput(transcript);
+      if (transcript) void sendAgentMessage(transcript, true);
+    };
+    recognition.onerror = () => setVoiceError(t.voiceUnavailable);
+    recognition.onend = () => {
+      setVoiceListening(false);
+      voiceRecognition.current = null;
+    };
+    recognition.start();
+  }
+
+  function applyAgentFilters(filters: AgentFilters) {
+    const nextDestination = filters.destination ?? destination;
+    const nextHotelName = filters.hotelName ?? hotelName;
+    const nextCheckIn = filters.checkIn ?? checkIn;
+    const nextCheckOut = filters.checkOut ?? checkOut;
+    const nextGuests = filters.guests ?? guests;
+    const nextMaxPrice = filters.maxPrice ?? maxPrice;
+    setDestination(nextDestination);
+    setHotelName(nextHotelName);
+    setCheckIn(nextCheckIn);
+    setCheckOut(nextCheckOut);
+    setGuests(nextGuests);
+    if (filters.propertyType) setType(filters.propertyType);
+    if (filters.stars !== undefined) setStars(filters.stars);
+    if (filters.maxPrice !== undefined) setMaxPrice(filters.maxPrice);
+    if (filters.sizeRange) setSizeRange(filters.sizeRange);
+    if (filters.mealPlan) setMealPlan(filters.mealPlan);
+    setAgentMessages((current) => [...current, { id: crypto.randomUUID(), role: "assistant", text: t.aiApplied }]);
+    setAgentOpen(false);
+    void runSearch({ destination: nextDestination, hotelName: nextHotelName, checkIn: nextCheckIn, checkOut: nextCheckOut, guests: nextGuests, maxPrice: nextMaxPrice });
+  }
+
+  function agentFilterLabels(filters: AgentFilters) {
+    const labels: string[] = [];
+    if (filters.destination) labels.push(destinationNames[language][filters.destination] || filters.destination);
+    if (filters.hotelName) labels.push(`${t.hotelNameLabel}: ${filters.hotelName}`);
+    if (filters.checkIn) labels.push(`${t.checkIn}: ${displayDate(filters.checkIn)}`);
+    if (filters.checkOut) labels.push(`${t.checkOut}: ${displayDate(filters.checkOut)}`);
+    if (filters.guests) labels.push(`${filters.guests} · ${t.guests}`);
+    if (filters.propertyType) labels.push(filters.propertyType === "Отель" ? t.hotel : filters.propertyType === "Апарт-отель" ? t.apart : filters.propertyType === "Вилла" ? t.villa : t.allTypes);
+    if (filters.stars) labels.push(`${filters.stars}★`);
+    if (filters.maxPrice) labels.push(`≤ €${filters.maxPrice.toLocaleString(locale)} · ${t.perNight}`);
+    if (filters.sizeRange) labels.push({ any: t.anyArea, "up-to-20": t.up20, "20-30": t.from20, "30-40": t.from30, "over-40": t.over40 }[filters.sizeRange]);
+    if (filters.mealPlan) labels.push({ any: t.anyMeal, "no-meals": t.noMeal, breakfast: t.breakfast, "half-board": t.halfBoard, "full-board": t.fullBoard, "all-inclusive": t.allInclusive }[filters.mealPlan]);
+    return labels;
   }
 
   function toggleSaved(stay: Stay) {
@@ -491,8 +681,18 @@ export default function Home() {
     });
   }
 
+  function movePhoto(stay: Stay, direction: -1 | 1) {
+    const photos = stay.images?.length ? stay.images : [stay.image || "/hero-istanbul.png"];
+    if (photos.length < 2) return;
+    const key = String(stay.id);
+    setPhotoIndices((current) => ({
+      ...current,
+      [key]: ((current[key] || 0) + direction + photos.length) % photos.length,
+    }));
+  }
+
   function displayDate(value: string) {
-    return new Intl.DateTimeFormat(locale, { day: "numeric", month: "long" }).format(parseIso(value));
+    return value ? new Intl.DateTimeFormat(locale, { day: "numeric", month: "long" }).format(parseIso(value)) : t.selectDates;
   }
 
   const calendarMonths = useMemo(() => Array.from({ length: 12 }, (_, month) => new Intl.DateTimeFormat(locale, { month: "long" }).format(new Date(calendarMonth.getFullYear(), month, 1))), [calendarMonth, locale]);
@@ -504,9 +704,16 @@ export default function Home() {
   }
 
   function selectDate(value: Date) {
+    const selectedIso = toIso(value);
+    if (selectedIso === checkIn || selectedIso === checkOut) {
+      setCheckIn("");
+      setCheckOut("");
+      setDatePicker("checkIn");
+      return;
+    }
     if (datePicker === "checkIn") {
-      setCheckIn(toIso(value));
-      if (value.getTime() >= parseIso(checkOut).getTime()) {
+      setCheckIn(selectedIso);
+      if (!checkOut || value.getTime() >= parseIso(checkOut).getTime()) {
         const next = new Date(value);
         next.setDate(next.getDate() + 1);
         setCheckOut(toIso(next));
@@ -514,13 +721,19 @@ export default function Home() {
       setDatePicker("checkOut");
       return;
     }
-    if (value.getTime() <= parseIso(checkIn).getTime()) {
-      setCheckIn(toIso(value));
+    if (!checkIn || value.getTime() <= parseIso(checkIn).getTime()) {
+      setCheckIn(selectedIso);
+      setCheckOut("");
       setDatePicker("checkOut");
       return;
     }
-    setCheckOut(toIso(value));
-    setDatePicker(null);
+    setCheckOut(selectedIso);
+  }
+
+  function clearDates() {
+    setCheckIn("");
+    setCheckOut("");
+    setDatePicker("checkIn");
   }
 
   function submitAuth(event: FormEvent<HTMLFormElement>) {
@@ -553,7 +766,24 @@ export default function Home() {
   }
 
   return (
-    <main>
+    <main aria-busy={searching}>
+      {searching && (
+        <div className="search-loading-overlay" role="status" aria-live="polite" aria-label={t.searchTitle}>
+          <div className="search-loading-card">
+            <div className="search-loading-mark" aria-hidden="true"><span /><span /><b>m</b></div>
+            <span className="search-loading-kicker">Mareva · live search</span>
+            <h2>{t.searchTitle}</h2>
+            <p>{t.searchDetail}</p>
+            <div className="search-loading-query">
+              <strong>{destinationNames[language][destination] || destination}</strong>
+              {hotelName && <span>{hotelName}</span>}
+              <span>{displayDate(checkIn)} — {displayDate(checkOut)}</span>
+              <span>{guests} · {t.guests.toLocaleLowerCase()}</span>
+            </div>
+            <div className="search-loading-progress" aria-hidden="true"><i /></div>
+          </div>
+        </div>
+      )}
       <header className="site-header">
         <a className="brand" href="#top" aria-label="Mareva — на главную">
           <img className="brand-icon" src="/favicon.png" alt="" />
@@ -590,15 +820,19 @@ export default function Home() {
               {destinations.map((item) => <option value={item} key={item}>{destinationNames[language][item]}</option>)}
             </select>
           </label>
-          <div className="search-field date-field">
+          <label className="search-field hotel-name-field">
+            <span>{t.hotelSearch}</span>
+            <input type="search" value={hotelName} onChange={(event) => setHotelName(event.target.value)} placeholder={t.hotelPlaceholder} maxLength={120} autoComplete="off" />
+          </label>
+          <div className="search-field date-field check-in-field">
             <span>{t.checkIn}</span>
-            <button type="button" onClick={() => { setDatePicker("checkIn"); setCalendarMonth(new Date(parseIso(checkIn).getFullYear(), parseIso(checkIn).getMonth(), 1)); }}>{displayDate(checkIn)} <b>⌄</b></button>
+            <button type="button" onClick={() => { setDatePicker("checkIn"); if (checkIn) setCalendarMonth(new Date(parseIso(checkIn).getFullYear(), parseIso(checkIn).getMonth(), 1)); }}>{displayDate(checkIn)} <b>⌄</b></button>
           </div>
-          <div className="search-field date-field">
+          <div className="search-field date-field check-out-field">
             <span>{t.checkOut}</span>
-            <button type="button" onClick={() => { setDatePicker("checkOut"); setCalendarMonth(new Date(parseIso(checkOut).getFullYear(), parseIso(checkOut).getMonth(), 1)); }}>{displayDate(checkOut)} <b>⌄</b></button>
+            <button type="button" onClick={() => { setDatePicker(checkIn ? "checkOut" : "checkIn"); if (checkOut) setCalendarMonth(new Date(parseIso(checkOut).getFullYear(), parseIso(checkOut).getMonth(), 1)); }}>{displayDate(checkOut)} <b>⌄</b></button>
           </div>
-          <label className="search-field">
+          <label className="search-field guest-field">
             <span>{t.guests}</span>
             <select value={guests} onChange={(event) => setGuests(Number(event.target.value))}>
               {Array.from({ length: 10 }, (_, index) => index + 1).map((item) => (
@@ -608,21 +842,26 @@ export default function Home() {
               ))}
             </select>
           </label>
-          <button className="search-button" onClick={runSearch} disabled={searching}>
-            {searching ? t.searching : t.find}<span aria-hidden="true">→</span>
-          </button>
+          <div className="search-actions">
+            <button className="search-button" onClick={() => void runSearch()} disabled={searching || !checkIn || !checkOut}>
+              {searching ? t.searching : t.find}<span aria-hidden="true">→</span>
+            </button>
+            <button className={`voice-search-button ${voiceListening ? "listening" : ""}`} type="button" onClick={startVoiceSearch} disabled={agentLoading || searching} aria-label={voiceListening ? t.voiceListening : t.voiceSearch} title={voiceListening ? t.voiceListening : t.voiceSearch}>
+              <span className="mic-icon" aria-hidden="true"><i /></span>
+            </button>
+          </div>
         </div>
         </div>
         {datePicker && <div className="calendar-overlay" role="presentation" onMouseDown={(event) => { if (event.currentTarget === event.target) setDatePicker(null); }}>
           <div className="calendar-modal" role="dialog" aria-modal="true" aria-label={t.selectDates}>
             <div className="calendar-head">
               <div className="calendar-title"><strong>{t.selectDates}</strong><span>{datePicker === "checkIn" ? t.chooseArrival : t.chooseDeparture}</span></div>
-              <button type="button" className="calendar-close" aria-label={t.close} onClick={() => setDatePicker(null)}>×</button>
+              <div className="calendar-head-actions"><button type="button" className="calendar-close" aria-label={t.close} onClick={() => setDatePicker(null)}>×</button></div>
             </div>
 
             <div className="calendar-date-tabs" role="tablist" aria-label={t.selectDates}>
-              <button type="button" role="tab" aria-selected={datePicker === "checkIn"} className={datePicker === "checkIn" ? "active" : ""} onClick={() => { setDatePicker("checkIn"); setCalendarMonth(new Date(parseIso(checkIn).getFullYear(), parseIso(checkIn).getMonth(), 1)); }}><span>{t.checkIn}</span><strong>{displayDate(checkIn)}</strong></button>
-              <button type="button" role="tab" aria-selected={datePicker === "checkOut"} className={datePicker === "checkOut" ? "active" : ""} onClick={() => { setDatePicker("checkOut"); setCalendarMonth(new Date(parseIso(checkOut).getFullYear(), parseIso(checkOut).getMonth(), 1)); }}><span>{t.checkOut}</span><strong>{displayDate(checkOut)}</strong></button>
+              <button type="button" role="tab" aria-selected={datePicker === "checkIn"} className={datePicker === "checkIn" ? "active" : ""} onClick={() => { setDatePicker("checkIn"); if (checkIn) setCalendarMonth(new Date(parseIso(checkIn).getFullYear(), parseIso(checkIn).getMonth(), 1)); }}><span>{t.checkIn}</span><strong>{displayDate(checkIn)}</strong></button>
+              <button type="button" role="tab" aria-selected={datePicker === "checkOut"} className={datePicker === "checkOut" ? "active" : ""} onClick={() => { setDatePicker(checkIn ? "checkOut" : "checkIn"); if (checkOut) setCalendarMonth(new Date(parseIso(checkOut).getFullYear(), parseIso(checkOut).getMonth(), 1)); }}><span>{t.checkOut}</span><strong>{displayDate(checkOut)}</strong></button>
             </div>
 
             <div className="calendar-year-row">
@@ -640,6 +879,8 @@ export default function Home() {
               <button type="button" className="calendar-arrow" aria-label={t.nextMonth} disabled={calendarMonth.getFullYear() === 2027 && calendarMonth.getMonth() === 11} onClick={() => moveCalendar(1)}>→</button>
             </div>
 
+            <div className="calendar-footer"><button type="button" className="calendar-clear" onClick={clearDates} disabled={!checkIn && !checkOut}>{t.clearDates}</button><button type="button" className="calendar-next" onClick={() => setDatePicker(null)} disabled={!checkIn || !checkOut}>{t.dateNext}<span aria-hidden="true">→</span></button></div>
+
           </div>
         </div>}
         <div className="popular">{t.popular} {["Анталья", "Сиде", "Кемер", "Бодрум", "Мармарис", "Фетхие"].map((item) => <button key={item} type="button" aria-pressed={destination === item} className={destination === item ? "active" : ""} onClick={() => setDestination(item)}>{destinationNames[language][item]}</button>)}</div>
@@ -655,7 +896,7 @@ export default function Home() {
           <div>
             <span className="section-kicker">{t.picked}</span>
             <h2>{destination === "Вся Турция" ? t.allTurkey : `${t.housing}: ${destinationNames[language][destination]}`}</h2>
-            <p>{filtered.length} {t.variants} · {checkIn.split("-").reverse().join(".")} — {checkOut.split("-").reverse().join(".")}</p>
+            <p>{filtered.length} {t.variants} · {checkIn && checkOut ? `${checkIn.split("-").reverse().join(".")} — ${checkOut.split("-").reverse().join(".")}` : t.selectDates}</p>
           </div>
           <div className="heading-actions">
             <button className="filter-mobile" onClick={() => setFiltersOpen(!filtersOpen)}>{t.filters}</button>
@@ -679,7 +920,7 @@ export default function Home() {
 
         <div className="catalog-layout">
           <aside className={filtersOpen ? "filters open" : "filters"}>
-            <div className="filter-title"><strong>{t.filters}</strong><button onClick={() => { setType("Все варианты"); setStars(0); setMaxPrice(1400); setSizeRange("any"); setMealPlan("any"); }}>{t.reset}</button></div>
+            <div className="filter-title"><strong>{t.filters}</strong><button onClick={() => { setType("Все варианты"); setStars(0); setMaxPrice(10000); setSizeRange("any"); setMealPlan("any"); }}>{t.reset}</button></div>
             <fieldset>
               <legend>{t.type}</legend>
               {[["Все варианты", t.allTypes], ["Отель", t.hotel], ["Апарт-отель", t.apart], ["Вилла", t.villa]].map(([value, label]) => (
@@ -716,8 +957,8 @@ export default function Home() {
             <fieldset>
               <legend>{t.price}</legend>
               <div className="range-value">{t.upTo} €{maxPrice.toLocaleString(locale)}</div>
-              <input className="range" type="range" min="400" max="1400" step="50" value={maxPrice} onChange={(event) => setMaxPrice(Number(event.target.value))} />
-              <div className="range-labels"><span>€400</span><span>€1 400+</span></div>
+              <input className="range" type="range" min="400" max="10000" step="100" value={maxPrice} onChange={(event) => setMaxPrice(Number(event.target.value))} aria-label={`${t.price}: ${t.upTo} €${maxPrice.toLocaleString(locale)}`} />
+              <div className="range-labels"><span>€400</span><span>€10 000</span></div>
             </fieldset>
             <div className="source-card"><span>WEB</span><strong>{t.webTitle}</strong><p>{t.webText}</p></div>
           </aside>
@@ -725,17 +966,23 @@ export default function Home() {
           <div className="results-list">
             {!searched && <div className="empty-state live-intro"><span>⌁</span><h3>{t.startLive}</h3><p>{t.requestText}</p></div>}
             {searched && filtered.length === 0 && (
-              <div className="empty-state"><span>⌁</span><h3>{searchError || t.noMatches}</h3><p>{searchError ? t.sourceMissing : t.expand}</p><button onClick={() => { setDestination("Вся Турция"); setMaxPrice(1400); setSizeRange("any"); setMealPlan("any"); }}>{t.showTurkey}</button></div>
+              <div className="empty-state"><span>⌁</span><h3>{searchError || t.noMatches}</h3><p>{searchError ? t.sourceMissing : t.expand}</p><button onClick={() => { setDestination("Вся Турция"); setMaxPrice(10000); setSizeRange("any"); setMealPlan("any"); }}>{t.showTurkey}</button></div>
             )}
             {filtered.map((stay) => {
               const discount = stay.discount ?? Math.round((1 - stay.price / stay.oldPrice) * 100);
+              const photos = stay.images?.length ? stay.images : [stay.image || "/hero-istanbul.png"];
+              const photoIndex = Math.min(photoIndices[String(stay.id)] || 0, photos.length - 1);
               return (
                 <article className="hotel-card" key={stay.id}>
                   <div className="hotel-image-wrap">
-                    <img className="hotel-image" src={stay.image || "/hero-istanbul.png"} alt={`${stay.name}, ${stay.city}`} />
+                    <img className="hotel-image" src={photos[photoIndex]} alt={`${stay.name}, ${stay.city} — ${photoIndex + 1}`} />
                     <span className="deal-badge">−{discount}% {t.deal}</span>
                     <button className={`heart ${saved.includes(stay.id) ? "saved" : ""}`} onClick={() => toggleSaved(stay)} aria-label={saved.includes(stay.id) ? "Удалить из избранного" : "Добавить в избранное"}>{saved.includes(stay.id) ? "♥" : "♡"}</button>
-                    <span className="photo-count">1 / 8</span>
+                    {photos.length > 1 && <>
+                      <button className="photo-arrow previous" type="button" onClick={() => movePhoto(stay, -1)} aria-label={t.previousPhoto}>‹</button>
+                      <button className="photo-arrow next" type="button" onClick={() => movePhoto(stay, 1)} aria-label={t.nextPhoto}>›</button>
+                    </>}
+                    <span className="photo-count">{photoIndex + 1} / {photos.length}</span>
                   </div>
                   <div className="hotel-content">
                     <div className="hotel-topline"><span>{stay.type === "Отель" ? t.hotel : stay.type === "Апарт-отель" ? t.apart : t.villa}</span><Stars count={stay.stars} /></div>
@@ -745,13 +992,21 @@ export default function Home() {
                     <div className="room-line"><strong>{stay.roomSize ? `${stay.roomSize} м²` : t.sizeAtSource} · {t.upToGuests} {stay.guests} {t.guestWord}</strong><span>{stay.feature}</span></div>
                     <div className="tag-row">{stay.tags.map((tag) => <span key={tag}>{tag}</span>)}</div>
                     <div className="price-row">
-                      <div><span className="old-price">€{stay.oldPrice.toLocaleString(locale)} · {t.officialPrice}</span><strong>€{stay.price.toLocaleString(locale)}</strong><small>{stay.live ? `${stay.feature} · ${t.checkedNow}` : t.demoPrice}</small></div>
+                      <div><span className="old-price">€{stay.oldPrice.toLocaleString(locale)} · {t.officialPrice}</span><strong>€{stay.price.toLocaleString(locale)}</strong><small>{stay.live ? `€${Math.round(stay.price / tripNights).toLocaleString(locale)} ${t.perNight} · ${t.totalStay} · ${stay.feature} · ${t.checkedNow}` : t.demoPrice}</small></div>
                       <a className="check-button" href={stay.link || outboundUrl(stay, destination)} target="_blank" rel="noreferrer" onClick={() => void trackActivity("outbound", stay.city)}>{t.checkWeb} <span>↗</span></a>
                     </div>
                   </div>
                 </article>
               );
             })}
+            {searched && searchError && liveStays.length > 0 && <p className="load-more-error" role="alert">{searchError}</p>}
+            {searched && searchCursor && (
+              <div className="load-more-wrap">
+                <button type="button" onClick={loadMoreOffers} disabled={searchingMore}>
+                  {searchingMore ? t.loadingMore : t.showMore}<span aria-hidden="true">↓</span>
+                </button>
+              </div>
+            )}
           </div>
         </div>
       </section>
@@ -775,6 +1030,43 @@ export default function Home() {
         <p>{t.footerText}</p>
         <div><a href="#how">{t.howSearch}</a><a href="#results">{t.catalog}</a><span>{language.toUpperCase()} · EUR</span></div>
       </footer>
+
+      <button className={`ai-launcher ${agentOpen ? "open" : ""}`} type="button" onClick={() => setAgentOpen((current) => !current)} aria-expanded={agentOpen} aria-controls="mareva-ai-panel">
+        <span className="ai-launcher-orb" aria-hidden="true">✦</span>
+        <span><strong>{t.aiName}</strong><small>{t.aiIntro}</small></span>
+      </button>
+
+      {agentOpen && (
+        <section className="ai-panel" id="mareva-ai-panel" role="dialog" aria-label={t.aiName}>
+          <header className="ai-panel-head">
+            <span className="ai-head-orb" aria-hidden="true">✦</span>
+            <div><strong>{t.aiName}</strong><span>{t.aiBadge}</span></div>
+            <button type="button" onClick={() => setAgentOpen(false)} aria-label={t.aiClose}>×</button>
+          </header>
+          <div className="ai-messages" aria-live="polite">
+            <div className="ai-message assistant"><p>{t.aiIntro}</p></div>
+            {agentMessages.map((message) => {
+              const labels = message.filters ? agentFilterLabels(message.filters) : [];
+              return (
+                <div className={`ai-message ${message.role}`} key={message.id}>
+                  <p>{message.text}</p>
+                  {labels.length > 0 && <div className="ai-filter-chips">{labels.map((label) => <span key={label}>{label}</span>)}</div>}
+                  {message.role === "assistant" && message.filters && labels.length > 0 && <button className="ai-apply" type="button" onClick={() => applyAgentFilters(message.filters!)}>{t.aiApply}<span>→</span></button>}
+                </div>
+              );
+            })}
+            {agentLoading && <div className="ai-message assistant thinking"><span /><span /><span /><small>{t.aiThinking}</small></div>}
+          </div>
+          {agentMessages.length === 0 && <div className="ai-suggestions">{t.aiExamples.map((example) => <button type="button" key={example} onClick={() => setAgentInput(example)}>{example}</button>)}</div>}
+          {voiceError && <p className="voice-error" role="alert">{voiceError}</p>}
+          <form className="ai-form" onSubmit={askAgent}>
+            <label className="sr-only" htmlFor="mareva-ai-input">{t.aiPlaceholder}</label>
+            <textarea id="mareva-ai-input" rows={2} value={agentInput} onChange={(event) => setAgentInput(event.target.value)} placeholder={t.aiPlaceholder} disabled={agentLoading} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); event.currentTarget.form?.requestSubmit(); } }} />
+            <button className={`ai-voice-button ${voiceListening ? "listening" : ""}`} type="button" onClick={startVoiceSearch} disabled={agentLoading} aria-label={voiceListening ? t.voiceListening : t.voiceSearch} title={voiceListening ? t.voiceListening : t.voiceSearch}><span className="mic-icon" aria-hidden="true"><i /></span></button>
+            <button className="ai-send-button" type="submit" disabled={!agentInput.trim() || agentLoading} aria-label={t.aiSend}>↑</button>
+          </form>
+        </section>
+      )}
 
       {authMode && <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setAuthMode(null); }}>
         <section className={`account-modal ${authMode === "account" ? "wide" : ""}`} role="dialog" aria-modal="true" aria-label={authMode === "account" ? t.profileTitle : authMode === "register" ? t.registerTitle : t.loginTitle}>
