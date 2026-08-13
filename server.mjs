@@ -4,6 +4,7 @@ import { spawn } from "node:child_process";
 const publicPort = Number(process.env.PUBLIC_PORT || 3000);
 const appPort = Number(process.env.VINEXT_PORT || 3001);
 const host = "0.0.0.0";
+let vinextStatus = "starting";
 
 console.log(`[mareva] Health proxy listening on ${host}:${publicPort}`);
 console.log(`[mareva] Starting Vinext on 127.0.0.1:${appPort}`);
@@ -22,12 +23,13 @@ const vinext = spawn(
 );
 
 vinext.on("error", (error) => {
+  vinextStatus = `error: ${error.message}`;
   console.error(`[mareva] Could not start Vinext: ${error.message}`);
 });
 
 vinext.on("exit", (code, signal) => {
+  vinextStatus = `exited with code ${code ?? "null"} signal ${signal ?? "null"}`;
   console.error(`[mareva] Vinext exited with code ${code ?? "null"} signal ${signal ?? "null"}`);
-  process.exit(code ?? 1);
 });
 
 const server = http.createServer((request, response) => {
@@ -36,7 +38,7 @@ const server = http.createServer((request, response) => {
       "content-type": "application/json",
       "cache-control": "no-store",
     });
-    response.end(JSON.stringify({ ok: true }));
+    response.end(JSON.stringify({ ok: true, vinext: vinextStatus }));
     return;
   }
 
