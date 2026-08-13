@@ -1,7 +1,7 @@
 import http from "node:http";
 import { spawn } from "node:child_process";
 
-const publicPort = Number(process.env.PORT || 3000);
+const publicPort = Number(process.env.PUBLIC_PORT || 3000);
 const appPort = Number(process.env.VINEXT_PORT || 3001);
 const host = "0.0.0.0";
 
