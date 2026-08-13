@@ -1,0 +1,18 @@
+services:
+  mareva:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: ["node", "server.mjs"]
+    ports:
+      - "3000:3000"
+    environment:
+      NODE_ENV: production
+      PUBLIC_PORT: "3000"
+      VINEXT_PORT: "3001"
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/health').then((response) => process.exit(response.ok ? 0 : 1)).catch(() => process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
