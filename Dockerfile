@@ -27,4 +27,4 @@ EXPOSE 3000
 
 HEALTHCHECK --interval=10s --timeout=5s --start-period=10s --retries=12 CMD ["node", "-e", "process.exit(0)"]
 
-CMD ["node", "server.mjs"]
+ENTRYPOINT ["node", "server.mjs"]
