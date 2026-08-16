@@ -1,6 +1,6 @@
 import http from "node:http";
 
-const port = 3000;
+const port = Number(process.env.PORT || 3000);
 const host = "0.0.0.0";
 
 function handleRequest(request, response) {
@@ -22,6 +22,6 @@ function handleRequest(request, response) {
 
 const server = http.createServer(handleRequest);
 
-server.listen(3000, host, () => {
-  console.log(`[mareva] Debug server listening on ${host}:3000`);
+server.listen(port, host, () => {
+  console.log(`[mareva] Debug server listening on ${host}:${port}`);
 });

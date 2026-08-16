@@ -2,6 +2,7 @@ FROM node:22.13.0-slim
 
 WORKDIR /app
 ENV NODE_ENV=production
+ENV PORT=3000
 ENV PUBLIC_PORT=3000
 
 RUN apt-get update \
