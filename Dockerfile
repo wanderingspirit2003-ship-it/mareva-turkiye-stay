@@ -11,7 +11,7 @@ RUN apt-get update \
 
 COPY server.mjs ./server.mjs
 
-EXPOSE 80
+EXPOSE 80 3000
 
 HEALTHCHECK --interval=10s --timeout=5s --start-period=5s --retries=12 CMD curl -fsS http://127.0.0.1/health || exit 1
 

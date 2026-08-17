@@ -1,6 +1,7 @@
 import http from "node:http";
 
-const port = Number(process.env.PORT || 3000);
+const primaryPort = Number(process.env.PORT || 80);
+const fallbackPort = 3000;
 const host = "0.0.0.0";
 
 function handleRequest(request, response) {
@@ -9,7 +10,7 @@ function handleRequest(request, response) {
       "content-type": "application/json",
       "cache-control": "no-store",
     });
-    response.end(JSON.stringify({ ok: true, service: "mareva-debug", port }));
+    response.end(JSON.stringify({ ok: true, service: "mareva-debug", port: request.socket.localPort }));
     return;
   }
 
@@ -20,8 +21,11 @@ function handleRequest(request, response) {
   response.end("<!doctype html><title>Mareva</title><main style=\"font-family:system-ui;padding:40px\"><h1>Mareva is online</h1><p>TimeWeb container responds on port 3000.</p></main>");
 }
 
-const server = http.createServer(handleRequest);
+const ports = [...new Set([primaryPort, fallbackPort])];
 
-server.listen(port, host, () => {
-  console.log(`[mareva] Debug server listening on ${host}:${port}`);
-});
+for (const port of ports) {
+  const server = http.createServer(handleRequest);
+  server.listen(port, host, () => {
+    console.log(`[mareva] Debug server listening on ${host}:${port}`);
+  });
+}
