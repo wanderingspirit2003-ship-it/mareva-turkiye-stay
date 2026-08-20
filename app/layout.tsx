@@ -24,7 +24,21 @@ export async function generateMetadata(): Promise<Metadata> {
     metadataBase: new URL(baseUrl),
     title: "Mareva — поиск отелей в Турции",
     description: "Независимый поиск отелей, апарт-отелей и вилл в Турции с переходом к источнику бронирования.",
-    icons: { icon: "/favicon.png", apple: "/mareva-icon.png" },
+    manifest: "/site.webmanifest",
+    applicationName: "Mareva",
+    appleWebApp: {
+      capable: true,
+      title: "Mareva",
+      statusBarStyle: "black-translucent",
+    },
+    icons: {
+      icon: [
+        { url: "/favicon.png", sizes: "64x64", type: "image/png" },
+        { url: "/mareva-icon-192.png", sizes: "192x192", type: "image/png" },
+        { url: "/mareva-icon-512.png", sizes: "512x512", type: "image/png" },
+      ],
+      apple: [{ url: "/apple-touch-icon.png", sizes: "180x180", type: "image/png" }],
+    },
     openGraph: {
       title: "Mareva — Турция без переплаты",
       description: "Независимый поиск жилья в Турции.",

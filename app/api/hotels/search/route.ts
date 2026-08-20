@@ -1,5 +1,3 @@
-import { env } from "cloudflare:workers";
-
 type SearchApiPrice = {
   extracted_price?: number;
   extracted_price_before_taxes?: number;
@@ -90,8 +88,7 @@ async function searchApiRequest(params: URLSearchParams, apiKey: string) {
 }
 
 export async function GET(request: Request) {
-  const runtimeEnv = env as unknown as Record<string, string | undefined>;
-  const apiKey = runtimeEnv.SEARCHAPI_KEY;
+  const apiKey = process.env.SEARCHAPI_KEY;
   if (!apiKey) {
     return Response.json({ error: "SOURCE_NOT_CONFIGURED", message: "Live hotel source is not configured." }, { status: 503 });
   }

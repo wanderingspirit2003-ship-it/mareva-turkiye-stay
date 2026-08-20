@@ -1,5 +1,3 @@
-import { env } from "cloudflare:workers";
-
 type Language = "ru" | "en" | "tr";
 
 type SearchFilters = {
@@ -65,8 +63,7 @@ const fallbackReplies: Record<Language, string> = {
 };
 
 export async function POST(request: Request) {
-  const runtimeEnv = env as unknown as Record<string, string | undefined>;
-  const apiKey = runtimeEnv.OPENROUTER_API_KEY;
+  const apiKey = process.env.OPENROUTER_API_KEY;
   if (!apiKey) {
     return Response.json({ error: "AGENT_NOT_CONFIGURED" }, { status: 503 });
   }
@@ -97,7 +94,7 @@ Extract only preferences clearly stated by the user, including a specific hotel 
         "X-OpenRouter-Title": "Mareva Turkiye",
       },
       body: JSON.stringify({
-        model: runtimeEnv.OPENROUTER_MODEL || "openai/gpt-4.1-mini",
+        model: process.env.OPENROUTER_MODEL || "openai/gpt-4.1-mini",
         temperature: 0.1,
         messages: [
           { role: "system", content: system },

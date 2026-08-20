@@ -383,6 +383,27 @@ function outboundUrl(stay: Stay, destination: string) {
   return `https://www.google.com/travel/search?q=${encodeURIComponent(`${stay.name} ${place} Turkey hotel`)}`;
 }
 
+function demoOffersForSearch({
+  destination,
+  hotelName,
+  guests,
+  maxPrice,
+  nights,
+}: {
+  destination: string;
+  hotelName: string;
+  guests: number;
+  maxPrice: number;
+  nights: number;
+}) {
+  const hotelQuery = hotelName.trim().toLowerCase();
+  return stays.filter((stay) => {
+    const cityOk = destination === "Вся Турция" || stay.city === destination;
+    const nameOk = !hotelQuery || stay.name.toLowerCase().includes(hotelQuery);
+    return cityOk && nameOk && stay.guests >= guests && stay.price / nights <= maxPrice;
+  });
+}
+
 async function trackActivity(eventType: "visit" | "search" | "outbound", destination?: string) {
   let sessionId = window.sessionStorage.getItem("mareva-session-id");
   if (!sessionId) {
@@ -524,10 +545,20 @@ export default function Home() {
       const payload = await response.json() as { offers?: Stay[]; nextCursor?: SearchCursor | null; error?: string; message?: string };
       if (!response.ok) throw new Error(payload.error === "SOURCE_NOT_CONFIGURED" ? t.sourceMissing : payload.message || t.noMatches);
       const incoming = payload.offers || [];
+      const fallbackOffers = !append && incoming.length === 0
+        ? demoOffersForSearch({
+          destination: searchDestination,
+          hotelName: searchHotelName,
+          guests: searchGuests,
+          maxPrice: searchMaxPrice,
+          nights: tripNights,
+        })
+        : [];
+      const nextOffers = incoming.length > 0 ? incoming : fallbackOffers;
       setLiveStays((current) => append
-        ? Array.from(new Map([...current, ...incoming].map((stay) => [stay.id, stay])).values())
-        : incoming);
-      setSearchCursor(payload.nextCursor || null);
+        ? Array.from(new Map([...current, ...nextOffers].map((stay) => [stay.id, stay])).values())
+        : nextOffers);
+      setSearchCursor(incoming.length > 0 ? payload.nextCursor || null : null);
       if (!append) {
         const item: HistoryItem = {
           id: crypto.randomUUID(), kind: "search", destination: searchDestination,
@@ -544,9 +575,20 @@ export default function Home() {
       setSearched(true);
       if (!append) document.getElementById("results")?.scrollIntoView({ behavior: "smooth", block: "start" });
     } catch (error) {
-      if (!append) setLiveStays([]);
+      if (!append) {
+        const fallbackOffers = demoOffersForSearch({
+          destination: searchDestination,
+          hotelName: searchHotelName,
+          guests: searchGuests,
+          maxPrice: searchMaxPrice,
+          nights: tripNights,
+        });
+        setLiveStays(fallbackOffers);
+        setSearchCursor(null);
+        setSearchError(fallbackOffers.length > 0 ? "" : error instanceof Error ? error.message : t.noMatches);
+      }
       setSearched(true);
-      setSearchError(error instanceof Error ? error.message : t.noMatches);
+      if (append) setSearchError(error instanceof Error ? error.message : t.noMatches);
     } finally {
       if (append) setSearchingMore(false);
       else setSearching(false);

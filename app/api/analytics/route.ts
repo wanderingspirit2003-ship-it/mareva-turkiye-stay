@@ -1,14 +1,24 @@
-import { env } from "cloudflare:workers";
-
 const allowedEvents = new Set(["visit", "search", "outbound"]);
 let schemaReady = false;
 
+type AnalyticsDatabase = {
+  batch: (statements: unknown[]) => Promise<unknown>;
+  prepare: (query: string) => {
+    bind: (...values: unknown[]) => { run: () => Promise<unknown> };
+    first: () => Promise<unknown>;
+    all: () => Promise<{ results?: unknown[] }>;
+  };
+};
+
+const analyticsDb = (globalThis as unknown as { env?: { DB?: AnalyticsDatabase } }).env?.DB;
+
 async function ensureAnalyticsSchema() {
+  if (!analyticsDb) return;
   if (schemaReady) return;
-  await env.DB.batch([
-    env.DB.prepare("CREATE TABLE IF NOT EXISTS analytics_events (id integer PRIMARY KEY AUTOINCREMENT NOT NULL, event_type text NOT NULL, destination text, session_id text, created_at integer DEFAULT 0 NOT NULL)"),
-    env.DB.prepare("CREATE INDEX IF NOT EXISTS idx_analytics_events_type_created ON analytics_events (event_type, created_at)"),
-    env.DB.prepare("CREATE INDEX IF NOT EXISTS idx_analytics_events_destination ON analytics_events (destination)"),
+  await analyticsDb.batch([
+    analyticsDb.prepare("CREATE TABLE IF NOT EXISTS analytics_events (id integer PRIMARY KEY AUTOINCREMENT NOT NULL, event_type text NOT NULL, destination text, session_id text, created_at integer DEFAULT 0 NOT NULL)"),
+    analyticsDb.prepare("CREATE INDEX IF NOT EXISTS idx_analytics_events_type_created ON analytics_events (event_type, created_at)"),
+    analyticsDb.prepare("CREATE INDEX IF NOT EXISTS idx_analytics_events_destination ON analytics_events (destination)"),
   ]);
   schemaReady = true;
 }
@@ -19,15 +29,20 @@ export async function POST(request: Request) {
     return Response.json({ error: "INVALID_EVENT" }, { status: 400 });
   }
   await ensureAnalyticsSchema();
-  await env.DB.prepare(
-    "INSERT INTO analytics_events (event_type, destination, session_id, created_at) VALUES (?, ?, ?, unixepoch())"
-  ).bind(body.eventType, body.destination || null, body.sessionId || null).run();
+  if (analyticsDb) {
+    await analyticsDb.prepare(
+      "INSERT INTO analytics_events (event_type, destination, session_id, created_at) VALUES (?, ?, ?, unixepoch())"
+    ).bind(body.eventType, body.destination || null, body.sessionId || null).run();
+  }
   return Response.json({ ok: true });
 }
 
 export async function GET() {
   await ensureAnalyticsSchema();
-  const totals = await env.DB.prepare(`
+  if (!analyticsDb) {
+    return Response.json({ totals: null, destinations: [], daily: [], storage: "disabled" });
+  }
+  const totals = await analyticsDb.prepare(`
     SELECT
       SUM(CASE WHEN event_type = 'visit' THEN 1 ELSE 0 END) AS visits,
       SUM(CASE WHEN event_type = 'search' THEN 1 ELSE 0 END) AS searches,
@@ -35,7 +50,7 @@ export async function GET() {
       COUNT(DISTINCT CASE WHEN event_type = 'visit' THEN session_id END) AS unique_sessions
     FROM analytics_events
   `).first();
-  const destinations = await env.DB.prepare(`
+  const destinations = await analyticsDb.prepare(`
     SELECT destination, COUNT(*) AS searches
     FROM analytics_events
     WHERE event_type = 'search' AND destination IS NOT NULL
@@ -43,7 +58,7 @@ export async function GET() {
     ORDER BY searches DESC
     LIMIT 10
   `).all();
-  const daily = await env.DB.prepare(`
+  const daily = await analyticsDb.prepare(`
     SELECT date(created_at, 'unixepoch') AS day,
       SUM(CASE WHEN event_type = 'visit' THEN 1 ELSE 0 END) AS visits,
       SUM(CASE WHEN event_type = 'search' THEN 1 ELSE 0 END) AS searches,
