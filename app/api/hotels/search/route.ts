@@ -43,6 +43,8 @@ type SearchApiResponse = {
   pagination?: { next_page_token?: string };
 };
 
+type PropertyType = "Отель" | "Апарт-отель" | "Вилла";
+
 const turkeySearchScopes = [
   ["Анталья", "Antalya"], ["Аланья", "Alanya"], ["Белек", "Belek"], ["Сиде", "Side"],
   ["Кемер", "Kemer"], ["Бодрум", "Bodrum"], ["Мармарис", "Marmaris"], ["Фетхие", "Fethiye"],
@@ -87,6 +89,20 @@ async function searchApiRequest(params: URLSearchParams, apiKey: string) {
   return response.json() as Promise<SearchApiResponse>;
 }
 
+function propertyKey(property: SearchApiProperty) {
+  return property.property_token || property.link || `${property.name || ""}-${property.address || ""}-${property.city || ""}`;
+}
+
+function mergeProperties(...groups: SearchApiProperty[][]) {
+  const seen = new Set<string>();
+  return groups.flatMap((group) => group.filter((property) => {
+    const key = propertyKey(property);
+    if (!key || seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  }));
+}
+
 export async function GET(request: Request) {
   const apiKey = process.env.SEARCHAPI_KEY;
   if (!apiKey) {
@@ -103,6 +119,10 @@ export async function GET(request: Request) {
   const checkIn = url.searchParams.get("checkIn") || "";
   const checkOut = url.searchParams.get("checkOut") || "";
   const adults = Math.max(1, Math.min(10, Number(url.searchParams.get("guests") || 2)));
+  const rooms = Math.max(1, Math.min(8, Number(url.searchParams.get("rooms") || 1)));
+  const propertyTypes = (url.searchParams.get("propertyTypes") || "")
+    .split(",")
+    .filter((item): item is PropertyType => item === "Отель" || item === "Апарт-отель" || item === "Вилла");
   const requestedMaxNightlyPrice = Number(url.searchParams.get("maxPrice") || 10000);
   const maxNightlyPrice = Number.isFinite(requestedMaxNightlyPrice)
     ? Math.max(400, Math.min(10000, requestedMaxNightlyPrice))
@@ -115,7 +135,8 @@ export async function GET(request: Request) {
     return Response.json({ error: "INVALID_DATES", message: "Choose a stay from 1 to 30 nights." }, { status: 400 });
   }
 
-  const scopes = destination === "Вся Турция" && !hotelName
+  const isWideTurkeySearch = destination === "Вся Турция" && !hotelName;
+  const scopes = isWideTurkeySearch
     ? turkeySearchScopes.map(([label, queryName]) => ({ label, queryName }))
     : [{ label: destination, queryName: destination === "Вся Турция" ? "Turkey" : destinationQueries[destination] || destination }];
   const scopeIndex = Number.isInteger(requestedScopeIndex)
@@ -124,35 +145,51 @@ export async function GET(request: Request) {
   const activeScope = scopes[scopeIndex];
   const locationQuery = activeScope.queryName === "Turkey" ? "Turkey" : `${activeScope.queryName}, Turkey`;
   const query = hotelName ? `${hotelName}, ${locationQuery}` : `Hotels in ${locationQuery}`;
-  const propertyType = adults > 6 ? "vacation_rental" : "hotel";
   const searchParams = new URLSearchParams({
     engine: "google_hotels",
     q: query,
     check_in_date: checkIn,
     check_out_date: checkOut,
     adults: String(adults),
+    rooms: String(rooms),
     currency: "EUR",
     gl: "tr",
     hl: language,
-    property_type: propertyType,
     sort_by: "lowest_price",
     price_max: String(maxNightlyPrice),
   });
-  if (propertyType === "hotel") searchParams.set("special_offers", "true");
+  if (propertyTypes.length === 1) {
+    searchParams.set("property_type", propertyTypes[0] === "Отель" ? "hotel" : "vacation_rental");
+  } else if (propertyTypes.length === 0 && adults > 6) {
+    searchParams.set("property_type", "vacation_rental");
+  }
   if (pageToken) searchParams.set("next_page_token", pageToken);
 
   try {
-    const search = await searchApiRequest(searchParams, apiKey);
-    const discountedProperties = (search.properties || [])
-      .filter((property) => property.property_token && discountOf(property.deal) > 0);
-    const properties = discountedProperties.slice(offset, offset + 8);
-    const nextCursor = offset + properties.length < discountedProperties.length
-      ? { scopeIndex, pageToken, offset: offset + properties.length }
-      : search.pagination?.next_page_token
-        ? { scopeIndex, pageToken: search.pagination.next_page_token, offset: 0 }
-        : scopeIndex + 1 < scopes.length
-          ? { scopeIndex: scopeIndex + 1, pageToken: "", offset: 0 }
-          : null;
+    const generalSearch = await searchApiRequest(searchParams, apiKey);
+    let specialSearch: SearchApiResponse | null = null;
+    if (!pageToken) {
+      const specialParams = new URLSearchParams(searchParams);
+      specialParams.set("special_offers", "true");
+      specialSearch = await searchApiRequest(specialParams, apiKey).catch(() => null);
+    }
+    const mergedProperties = specialSearch
+      ? mergeProperties(specialSearch.properties || [], generalSearch.properties || [])
+      : generalSearch.properties || [];
+    const searchableProperties = mergedProperties
+      .filter((property) => property.property_token || property.link || property.name);
+    const properties = searchableProperties.slice(offset, offset + 18);
+    const nextCursor = isWideTurkeySearch
+      ? scopeIndex + 1 < scopes.length
+        ? { scopeIndex: scopeIndex + 1, pageToken: "", offset: 0 }
+        : null
+      : offset + properties.length < searchableProperties.length
+        ? { scopeIndex, pageToken, offset: offset + properties.length }
+        : generalSearch.pagination?.next_page_token
+          ? { scopeIndex, pageToken: generalSearch.pagination.next_page_token, offset: 0 }
+          : scopeIndex + 1 < scopes.length
+            ? { scopeIndex: scopeIndex + 1, pageToken: "", offset: 0 }
+            : null;
     const checkedAt = new Date().toISOString();
     // The hotel list already contains prices, deal labels, links and galleries.
     // Keeping one upstream call per portion preserves the SearchAPI allowance.
@@ -174,11 +211,12 @@ export async function GET(request: Request) {
         ? Math.round((1 - current / official.total) * 100)
         : 0;
       const discount = exactDiscount || statedDiscount;
-      if (discount < 1) return [];
       const usualTotal = exactDiscount
         ? official!.total
-        : Math.round(current / (1 - Math.min(discount, 90) / 100));
-      if (usualTotal <= current) return [];
+        : discount > 0
+          ? Math.round(current / (1 - Math.min(discount, 90) / 100))
+          : current;
+      if (discount > 0 && usualTotal <= current) return [];
 
       const images = Array.from(new Set((property.images || [])
         .map((item) => item.original || item.thumbnail || "")
@@ -192,6 +230,7 @@ export async function GET(request: Request) {
         : isRental || /villa|bungalow|cottage/.test(descriptor)
           ? "Вилла"
           : "Отель";
+      if (propertyTypes.length > 0 && !propertyTypes.includes(stayType)) return [];
       const bookingSource = bookable?.offer.source || property.deal_description || "Google Hotels";
       const bookingLink = bookable?.offer.link || bookable?.offer.tracking_link || property.link;
       if (!bookingLink) return [];
@@ -206,14 +245,16 @@ export async function GET(request: Request) {
         score: property.rating ? Math.min(10, Math.round(property.rating * 20) / 10) : 0,
         reviews: property.reviews || 0,
         roomSize: roomSizeOf(property.essential_info),
-        guests: adults,
+        guests: Math.max(adults, Math.ceil(adults / rooms)),
         price: Math.round(current),
         oldPrice: Math.round(usualTotal),
         image,
         images,
         tags: [
           bookingSource,
-          bookable?.offer.has_free_cancellation ? "Бесплатная отмена" : property.deal_description || property.deal || "Спецпредложение",
+          bookable?.offer.has_free_cancellation
+            ? "Бесплатная отмена"
+            : property.deal_description || property.deal || (discount > 0 ? "Спецпредложение" : "Обычный вариант"),
           ...(property.amenities || []).slice(0, 4),
         ],
         feature: bookingSource,
@@ -224,7 +265,7 @@ export async function GET(request: Request) {
         checkedAt,
         live: true,
       }];
-    }).sort((a, b) => b.discount - a.discount || a.price - b.price);
+    }).sort((a, b) => (b.discount || 0) - (a.discount || 0) || a.price - b.price);
 
     return Response.json({ offers, checkedAt, searched: properties.length, nextCursor, searchedScope: activeScope.label, source: "Google Hotels via SearchAPI.io" }, {
       headers: { "Cache-Control": "private, max-age=900" },

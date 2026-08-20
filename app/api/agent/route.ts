@@ -6,7 +6,9 @@ type SearchFilters = {
   checkIn?: string;
   checkOut?: string;
   guests?: number;
+  rooms?: number;
   propertyType?: "Все варианты" | "Отель" | "Апарт-отель" | "Вилла";
+  propertyTypes?: Array<"Отель" | "Апарт-отель" | "Вилла">;
   stars?: 0 | 3 | 4 | 5;
   maxPrice?: number;
   sizeRange?: "any" | "up-to-20" | "20-30" | "30-40" | "over-40";
@@ -19,6 +21,7 @@ const destinations = [
 ] as const;
 
 const propertyTypes = ["Все варианты", "Отель", "Апарт-отель", "Вилла"] as const;
+const selectablePropertyTypes = ["Отель", "Апарт-отель", "Вилла"] as const;
 const sizeRanges = ["any", "up-to-20", "20-30", "30-40", "over-40"] as const;
 const mealPlans = ["any", "no-meals", "breakfast", "half-board", "full-board", "all-inclusive"] as const;
 
@@ -40,7 +43,12 @@ function cleanFilters(raw: unknown): SearchFilters {
   if (checkIn) filters.checkIn = checkIn;
   if (checkOut) filters.checkOut = checkOut;
   if (typeof value.guests === "number" && Number.isFinite(value.guests)) filters.guests = Math.max(1, Math.min(10, Math.round(value.guests)));
+  if (typeof value.rooms === "number" && Number.isFinite(value.rooms)) filters.rooms = Math.max(1, Math.min(8, Math.round(value.rooms)));
   if (typeof value.propertyType === "string" && propertyTypes.includes(value.propertyType as typeof propertyTypes[number])) filters.propertyType = value.propertyType as SearchFilters["propertyType"];
+  if (Array.isArray(value.propertyTypes)) {
+    const next = value.propertyTypes.filter((item): item is typeof selectablePropertyTypes[number] => selectablePropertyTypes.includes(item as typeof selectablePropertyTypes[number]));
+    if (next.length > 0) filters.propertyTypes = Array.from(new Set(next));
+  }
   if (typeof value.stars === "number" && [0, 3, 4, 5].includes(value.stars)) filters.stars = value.stars as SearchFilters["stars"];
   if (typeof value.maxPrice === "number" && Number.isFinite(value.maxPrice)) filters.maxPrice = Math.max(400, Math.min(10000, Math.round(value.maxPrice / 100) * 100));
   if (typeof value.sizeRange === "string" && sizeRanges.includes(value.sizeRange as typeof sizeRanges[number])) filters.sizeRange = value.sizeRange as SearchFilters["sizeRange"];
@@ -82,7 +90,7 @@ export async function POST(request: Request) {
 
   const today = new Date().toISOString().slice(0, 10);
   const system = `You are Mareva AI, a concise hotel search assistant for Turkey. The interface language is ${language}.
-Extract only preferences clearly stated by the user, including a specific hotel name when one is spoken. Do not invent hotel names, dates, budget, guests, category, meal plan, property type, or room size. Relative dates are resolved from ${today}. The portal calendar supports only 2026 and 2027. Use Russian canonical destination and property values exactly as specified by the tool schema, regardless of interface language. The current search is ${JSON.stringify(current)}; omit unchanged fields unless the user explicitly confirms or changes them. Always call prepare_hotel_search. Then write one brief friendly sentence in the interface language. Never claim that prices or availability were checked: another deterministic workflow performs that search.`;
+Extract only preferences clearly stated by the user, including a specific hotel name when one is spoken. Do not invent hotel names, dates, budget, guests, rooms, category, meal plan, property type, or room size. Relative dates are resolved from ${today}. The portal calendar supports only 2026 and 2027. Use Russian canonical destination and property values exactly as specified by the tool schema, regardless of interface language. If the user names several property types, put them into propertyTypes. The current search is ${JSON.stringify(current)}; omit unchanged fields unless the user explicitly confirms or changes them. Always call prepare_hotel_search. Then write one brief friendly sentence in the interface language. Never claim that prices or availability were checked: another deterministic workflow performs that search.`;
 
   try {
     const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
@@ -114,13 +122,15 @@ Extract only preferences clearly stated by the user, including a specific hotel 
                 checkIn: { type: ["string", "null"], description: "Check-in date as YYYY-MM-DD, only in 2026 or 2027." },
                 checkOut: { type: ["string", "null"], description: "Check-out date as YYYY-MM-DD, only in 2026 or 2027." },
                 guests: { type: ["integer", "null"], minimum: 1, maximum: 10 },
+                rooms: { type: ["integer", "null"], minimum: 1, maximum: 8 },
                 propertyType: { type: ["string", "null"], enum: [...propertyTypes, null] },
+                propertyTypes: { type: ["array", "null"], items: { type: "string", enum: [...selectablePropertyTypes] }, uniqueItems: true, maxItems: 3 },
                 stars: { type: ["integer", "null"], enum: [0, 3, 4, 5, null] },
                 maxPrice: { type: ["number", "null"], minimum: 400, maximum: 10000, description: "Maximum price in EUR per night, not the total stay price." },
                 sizeRange: { type: ["string", "null"], enum: [...sizeRanges, null] },
                 mealPlan: { type: ["string", "null"], enum: [...mealPlans, null] },
               },
-              required: ["destination", "hotelName", "checkIn", "checkOut", "guests", "propertyType", "stars", "maxPrice", "sizeRange", "mealPlan"],
+              required: ["destination", "hotelName", "checkIn", "checkOut", "guests", "rooms", "propertyType", "propertyTypes", "stars", "maxPrice", "sizeRange", "mealPlan"],
             },
           },
         }],
