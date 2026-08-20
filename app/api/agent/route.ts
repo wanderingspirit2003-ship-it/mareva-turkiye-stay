@@ -70,8 +70,19 @@ const fallbackReplies: Record<Language, string> = {
   tr: "Tatil tercihlerinizi hazırladım. Kontrol edip “Uygula ve ara” düğmesine basın.",
 };
 
+function envSetting(names: string[], fallback = "") {
+  for (const name of names) {
+    const raw = process.env[name]?.trim();
+    if (!raw) continue;
+    const matchingLine = raw.split(/\r?\n/).find((line) => names.some((item) => line.trim().startsWith(`${item}=`)));
+    if (matchingLine) return matchingLine.split("=").slice(1).join("=").trim();
+    if (!raw.includes("=") && !raw.includes("\n")) return raw;
+  }
+  return fallback;
+}
+
 export async function POST(request: Request) {
-  const apiKey = process.env.OPENROUTER_API_KEY || process.env.OPENROUTER_KEY;
+  const apiKey = envSetting(["OPENROUTER_API_KEY", "OPENROUTER_KEY"]);
   if (!apiKey) {
     return Response.json({ error: "AGENT_NOT_CONFIGURED" }, { status: 503 });
   }
@@ -89,7 +100,7 @@ export async function POST(request: Request) {
   if (!message) return Response.json({ error: "EMPTY_MESSAGE" }, { status: 400 });
 
   const today = new Date().toISOString().slice(0, 10);
-  const model = process.env.OPENROUTER_MODEL || process.env.OPENROUTER_MODULE || process.env.OPENROUTER_MODEL_ID || "deepseek/deepseek-v4-flash";
+  const model = envSetting(["OPENROUTER_MODEL", "OPENROUTER_MODULE", "OPENROUTER_MODEL_ID"], "deepseek/deepseek-v4-flash");
   const system = `You are Mareva AI, a concise hotel search assistant for Turkey. The interface language is ${language}.
 Extract only preferences clearly stated by the user, including a specific hotel name when one is spoken. Do not invent hotel names, dates, budget, guests, rooms, category, meal plan, property type, or room size. Relative dates are resolved from ${today}. The portal calendar supports only 2026 and 2027. Use Russian canonical destination and property values exactly as specified by the tool schema, regardless of interface language. If the user names several property types, put them into propertyTypes. The current search is ${JSON.stringify(current)}; omit unchanged fields unless the user explicitly confirms or changes them. Always call prepare_hotel_search. Then write one brief friendly sentence in the interface language. Never claim that prices or availability were checked: another deterministic workflow performs that search.`;
 
@@ -147,7 +158,7 @@ Extract only preferences clearly stated by the user, including a specific hotel 
     try {
       data = JSON.parse(rawResponse.trim());
     } catch {
-      return Response.json({ error: "AGENT_UPSTREAM_TEXT", message: rawResponse.slice(0, 240) || "OpenRouter returned a non-JSON response" }, { status: 502 });
+      return Response.json({ error: "AGENT_UPSTREAM_TEXT", message: "OpenRouter returned a non-JSON response" }, { status: 502 });
     }
     if (!response.ok) {
       return Response.json({ error: "AGENT_UPSTREAM_ERROR", message: data.error?.message || "OpenRouter request failed" }, { status: 502 });
@@ -162,7 +173,7 @@ Extract only preferences clearly stated by the user, including a specific hotel 
     const filters = changedFilters(cleanFilters(rawFilters), current);
     const reply = assistant?.content?.trim() || fallbackReplies[language];
     return Response.json({ reply, filters });
-  } catch (error) {
-    return Response.json({ error: "AGENT_UNAVAILABLE", message: error instanceof Error ? error.message : "OpenRouter request failed before response" }, { status: 502 });
+  } catch {
+    return Response.json({ error: "AGENT_UNAVAILABLE", message: "OpenRouter request failed before response" }, { status: 502 });
   }
 }
