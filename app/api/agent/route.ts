@@ -161,7 +161,10 @@ Extract only preferences clearly stated by the user, including a specific hotel 
       return Response.json({ error: "AGENT_UPSTREAM_TEXT", message: "OpenRouter returned a non-JSON response" }, { status: 502 });
     }
     if (!response.ok) {
-      return Response.json({ error: "AGENT_UPSTREAM_ERROR", message: data.error?.message || "OpenRouter request failed" }, { status: 502 });
+      const upstreamMessage = typeof data.error === "string"
+        ? data.error
+        : data.error?.message || `OpenRouter returned HTTP ${response.status}`;
+      return Response.json({ error: "AGENT_UPSTREAM_ERROR", message: upstreamMessage }, { status: 502 });
     }
 
     const assistant = data.choices?.[0]?.message;
