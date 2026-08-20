@@ -32,7 +32,7 @@ test("server-renders the Mareva hotel portal", async () => {
   assert.match(html, /class="ai-launcher/i);
 });
 
-test("keeps OpenRouter credentials server-side", async () => {
+test("keeps AI credentials server-side", async () => {
   const [page, route, css, envExample, gitignore] = await Promise.all([
     readFile(new URL("../app/page.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/api/agent/route.ts", import.meta.url), "utf8"),
@@ -43,13 +43,16 @@ test("keeps OpenRouter credentials server-side", async () => {
 
   assert.match(page, /fetch\("\/api\/agent"/);
   assert.match(page, /applyAgentFilters/);
-  assert.match(route, /from "cloudflare:workers"/);
+  assert.match(route, /https:\/\/api\.openai\.com\/v1\/chat\/completions/);
   assert.match(route, /https:\/\/openrouter\.ai\/api\/v1\/chat\/completions/);
   assert.match(route, /prepare_hotel_search/);
   assert.match(route, /hotelName/);
   assert.match(route, /maximum: 10000/);
-  assert.match(route, /runtimeEnv\.OPENROUTER_API_KEY/);
+  assert.match(route, /OPENAI_API_KEY/);
+  assert.match(route, /OPENROUTER_API_KEY/);
   assert.match(css, /\.ai-panel\s*\{[^}]*position:\s*fixed/s);
+  assert.match(envExample, /^OPENAI_API_KEY=$/m);
+  assert.match(envExample, /^OPENAI_MODEL=gpt-4\.1-mini$/m);
   assert.match(envExample, /^OPENROUTER_API_KEY=$/m);
   assert.match(gitignore, /^\.env\*$/m);
   assert.doesNotMatch(page, /sk-or-v1-/);
@@ -70,7 +73,7 @@ test("keeps SearchAPI credentials server-side", async () => {
   assert.match(page, /movePhoto/);
   assert.match(page, /photo-arrow/);
   assert.match(route, /https:\/\/www\.searchapi\.io\/api\/v1\/search/);
-  assert.match(route, /runtimeEnv\.SEARCHAPI_KEY/);
+  assert.match(route, /process\.env\.SEARCHAPI_KEY/);
   assert.match(route, /Authorization: `Bearer \$\{apiKey\}`/);
   assert.match(route, /special_offers/);
   assert.match(route, /price_max/);

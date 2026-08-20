@@ -82,8 +82,9 @@ function envSetting(names: string[], fallback = "") {
 }
 
 export async function POST(request: Request) {
-  const apiKey = envSetting(["OPENROUTER_API_KEY", "OPENROUTER_KEY"]);
-  if (!apiKey) {
+  const openAiKey = envSetting(["OPENAI_API_KEY"]);
+  const openRouterKey = envSetting(["OPENROUTER_API_KEY", "OPENROUTER_KEY"]);
+  if (!openAiKey && !openRouterKey) {
     return Response.json({ error: "AGENT_NOT_CONFIGURED" }, { status: 503 });
   }
 
@@ -100,15 +101,21 @@ export async function POST(request: Request) {
   if (!message) return Response.json({ error: "EMPTY_MESSAGE" }, { status: 400 });
 
   const today = new Date().toISOString().slice(0, 10);
-  const model = envSetting(["OPENROUTER_MODEL", "OPENROUTER_MODULE", "OPENROUTER_MODEL_ID"], "deepseek/deepseek-v4-flash");
+  const provider = openAiKey ? "OpenAI" : "OpenRouter";
+  const model = openAiKey
+    ? envSetting(["OPENAI_MODEL", "OPENAI_MODEL_ID"], "gpt-4.1-mini")
+    : envSetting(["OPENROUTER_MODEL", "OPENROUTER_MODULE", "OPENROUTER_MODEL_ID"], "deepseek/deepseek-v4-flash");
   const system = `You are Mareva AI, a concise hotel search assistant for Turkey. The interface language is ${language}.
 Extract only preferences clearly stated by the user, including a specific hotel name when one is spoken. Do not invent hotel names, dates, budget, guests, rooms, category, meal plan, property type, or room size. Relative dates are resolved from ${today}. The portal calendar supports only 2026 and 2027. Use Russian canonical destination and property values exactly as specified by the tool schema, regardless of interface language. If the user names several property types, put them into propertyTypes. The current search is ${JSON.stringify(current)}; omit unchanged fields unless the user explicitly confirms or changes them. Always call prepare_hotel_search. Then write one brief friendly sentence in the interface language. Never claim that prices or availability were checked: another deterministic workflow performs that search.`;
 
   try {
-    const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+    const response = await fetch(openAiKey ? "https://api.openai.com/v1/chat/completions" : "https://openrouter.ai/api/v1/chat/completions", {
       method: "POST",
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
+      headers: openAiKey ? {
+        Authorization: `Bearer ${openAiKey}`,
+        "Content-Type": "application/json",
+      } : {
+        Authorization: `Bearer ${openRouterKey}`,
         "Content-Type": "application/json",
         "HTTP-Referer": request.headers.get("origin") || "https://mareva-turkiye.wanderingspirit2003.chatgpt.site",
         "X-OpenRouter-Title": "Mareva Turkiye",
@@ -158,12 +165,12 @@ Extract only preferences clearly stated by the user, including a specific hotel 
     try {
       data = JSON.parse(rawResponse.trim());
     } catch {
-      return Response.json({ error: "AGENT_UPSTREAM_TEXT", message: "OpenRouter returned a non-JSON response" }, { status: 502 });
+      return Response.json({ error: "AGENT_UPSTREAM_TEXT", message: `${provider} returned a non-JSON response` }, { status: 502 });
     }
     if (!response.ok) {
       const upstreamMessage = typeof data.error === "string"
         ? data.error
-        : data.error?.message || `OpenRouter returned HTTP ${response.status}`;
+        : data.error?.message || `${provider} returned HTTP ${response.status}`;
       return Response.json({ error: "AGENT_UPSTREAM_ERROR", message: upstreamMessage }, { status: 502 });
     }
 
@@ -177,6 +184,6 @@ Extract only preferences clearly stated by the user, including a specific hotel 
     const reply = assistant?.content?.trim() || fallbackReplies[language];
     return Response.json({ reply, filters });
   } catch {
-    return Response.json({ error: "AGENT_UNAVAILABLE", message: "OpenRouter request failed before response" }, { status: 502 });
+    return Response.json({ error: "AGENT_UNAVAILABLE", message: `${provider} request failed before response` }, { status: 502 });
   }
 }
