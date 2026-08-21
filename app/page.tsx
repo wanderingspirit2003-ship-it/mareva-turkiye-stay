@@ -360,6 +360,14 @@ function parseDayToken(value: string) {
   return day >= 1 && day <= 31 ? day : undefined;
 }
 
+function isDateRangeBridge(value = "") {
+  return /^(?:-|—|по|до|to|и|заезд|выезд|checkin|checkout|arrival|departure|giris|giriş|cikis|çıkış)$/.test(value);
+}
+
+function isGuestRoomToken(value = "") {
+  return /^(?:гост|гость|гостя|гостей|человек|персон|номер|номера|номеров|guest|guests|room|rooms|oda)$/.test(value);
+}
+
 function applyTokenizedDateRange(normalized: string, filters: AgentFilters) {
   const tokens = normalized.split(/\s+/).filter(Boolean);
   for (let index = 0; index < tokens.length; index += 1) {
@@ -379,16 +387,34 @@ function applyTokenizedDateRange(normalized: string, filters: AgentFilters) {
       return true;
     }
 
-    if (previousThirdDay && previousDay && /^(?:-|—|по|до|to|и)$/.test(previousSeparator || "")) {
+    if (previousThirdDay && previousDay && isDateRangeBridge(previousSeparator)) {
       filters.checkIn = isoDate(previousThirdDay, month);
       filters.checkOut = isoDate(previousDay, month);
       return true;
     }
 
-    if (previousDay && nextDay && (!nextSeparator || /^(?:-|—|по|до|to|и)$/.test(nextSeparator))) {
+    if (previousDay && nextDay && (!nextSeparator || isDateRangeBridge(nextSeparator))) {
       filters.checkIn = isoDate(previousDay, month);
       filters.checkOut = isoDate(nextDay, month);
       return true;
+    }
+
+    const start = Math.max(0, index - 5);
+    const priorDays = tokens
+      .slice(start, index)
+      .map((token, offset) => ({ day: parseDayToken(token), position: start + offset }))
+      .filter((item): item is { day: number; position: number } => item.day !== undefined);
+    if (priorDays.length >= 2) {
+      const [first, second] = priorDays.slice(-2);
+      const between = tokens.slice(first.position + 1, second.position);
+      const afterFirst = tokens[first.position + 1] || "";
+      const hasDateBridge = second.position - first.position === 1 || between.some(isDateRangeBridge) || isDateRangeBridge(tokens[first.position - 1]);
+      const hasGuestRoomWords = isGuestRoomToken(afterFirst) || between.some(isGuestRoomToken);
+      if (hasDateBridge && !hasGuestRoomWords) {
+        filters.checkIn = isoDate(first.day, month);
+        filters.checkOut = isoDate(second.day, month);
+        return true;
+      }
     }
   }
   return false;
@@ -525,7 +551,7 @@ const translations = {
     heroCopy: "Собираем предложения отелей, апарт-отелей и вилл и показываем только те, где цена со скидкой ниже цены до скидки.", heroPromise: "Экономим ваши деньги. Качество отдыха неизменно.",
     where: "Куда", hotelSearch: "Название отеля", hotelPlaceholder: "Любой отель", checkIn: "Заезд", checkOut: "Выезд", guests: "Гости", rooms: "Номера", find: "Найти", searching: "Ищем…", searchTitle: "Ищем лучшие предложения", searchDetail: "Проверяем реальные скидки и цены на выбранные даты", popular: "Популярно:",
     selectDates: "Выберите даты", chooseArrival: "Сначала выберите дату заезда", chooseDeparture: "Теперь выберите дату выезда", close: "Закрыть", clearDates: "Очистить", dateNext: "Далее", year: "Год", previousMonth: "Предыдущий месяц", nextMonth: "Следующий месяц",
-    benefits: [["Цена со скидкой", "Ниже цены без скидки на те же даты"], ["Один объект — одна карточка", "Без дублей в выдаче"], ["Прямой переход", "Бронирование у источника"], ["Только экономия", "Предложения без скидки не показываем"]],
+    benefits: [["Цена со скидкой", "Ниже цены без скидки на те же даты"], ["Один объект — одна карточка", "Без дублей в выдаче"], ["Прямой переход", "Бронирование у источника"], ["Только экономия", "Предложения без скидок показываем после найденных предложений со скидками"]],
     picked: "Подобрали для вас", allTurkey: "Отдых по всей Турции", housing: "Отдых", variants: "вариантов в прототипе", filters: "Фильтры", reset: "Сбросить",
     sort: "Сортировка", sortDeal: "Выгодные сначала", sortCheap: "Сначала дешевле", sortRating: "По рейтингу", type: "Тип жилья", category: "Категория", all: "Все",
     allTypes: "Все варианты", hotel: "Отель", apart: "Апарт-отель", villa: "Вилла", area: "Площадь номера", anyArea: "Любая площадь", up20: "До 20 м²", from20: "От 20 до 30 м²", from30: "От 30 до 40 м²", over40: "Выше 40 м²",
@@ -545,7 +571,7 @@ const translations = {
     heroCopy: "We find live deals priced below the regular price. You save money while the quality of your holiday stays the same.", heroPromise: "Save money. Not memories.",
     where: "Where", hotelSearch: "Hotel name", hotelPlaceholder: "Any hotel", checkIn: "Check-in", checkOut: "Check-out", guests: "Guests", rooms: "Rooms", find: "Search", searching: "Searching…", searchTitle: "Searching for the best deals", searchDetail: "Checking live discounts and prices for your dates", popular: "Popular:",
     selectDates: "Select dates", chooseArrival: "Choose your check-in date first", chooseDeparture: "Now choose your check-out date", close: "Close", clearDates: "Clear", dateNext: "Continue", year: "Year", previousMonth: "Previous month", nextMonth: "Next month",
-    benefits: [["Discounted price", "Below the regular price for the same dates"], ["One property, one card", "No duplicates"], ["Direct handoff", "Book with the source"], ["Savings only", "Offers without a discount are hidden"]],
+    benefits: [["Discounted price", "Below the regular price for the same dates"], ["One property, one card", "No duplicates"], ["Direct handoff", "Book with the source"], ["Savings first", "Offers without a discount appear after matching discounted options"]],
     picked: "Selected for you", allTurkey: "Stays across Turkey", housing: "Stays", variants: "prototype options", filters: "Filters", reset: "Reset",
     sort: "Sort", sortDeal: "Best deals first", sortCheap: "Lowest price", sortRating: "Highest rating", type: "Property type", category: "Category", all: "All",
     allTypes: "All properties", hotel: "Hotel", apart: "Aparthotel", villa: "Villa", area: "Room size", anyArea: "Any size", up20: "Up to 20 m²", from20: "20 to 30 m²", from30: "30 to 40 m²", over40: "Over 40 m²",
@@ -565,7 +591,7 @@ const translations = {
     heroCopy: "Resmi fiyattan daha düşük güncel fırsatları buluruz. Siz tasarruf ederken tatil kalitesi değişmez.", heroPromise: "Paradan tasarruf edin. Anılardan değil.",
     where: "Nereye", hotelSearch: "Otel adı", hotelPlaceholder: "Herhangi bir otel", checkIn: "Giriş", checkOut: "Çıkış", guests: "Misafir", rooms: "Odalar", find: "Ara", searching: "Aranıyor…", searchTitle: "En iyi fırsatlar aranıyor", searchDetail: "Seçtiğiniz tarihler için güncel indirimler ve fiyatlar kontrol ediliyor", popular: "Popüler:",
     selectDates: "Tarihleri seçin", chooseArrival: "Önce giriş tarihini seçin", chooseDeparture: "Şimdi çıkış tarihini seçin", close: "Kapat", clearDates: "Temizle", dateNext: "Devam", year: "Yıl", previousMonth: "Önceki ay", nextMonth: "Sonraki ay",
-    benefits: [["İndirimli fiyat", "Aynı tarihlerde resmi fiyattan düşük"], ["Bir tesis, bir kart", "Tekrarsız sonuçlar"], ["Doğrudan yönlendirme", "Kaynakta rezervasyon"], ["Yalnızca tasarruf", "Tam fiyatlı tesisler gizlenir"]],
+    benefits: [["İndirimli fiyat", "Aynı tarihlerde resmi fiyattan düşük"], ["Bir tesis, bir kart", "Tekrarsız sonuçlar"], ["Doğrudan yönlendirme", "Kaynakta rezervasyon"], ["Önce tasarruf", "İndirimsiz seçenekler indirimli eşleşmelerden sonra gösterilir"]],
     picked: "Sizin için seçtik", allTurkey: "Türkiye genelinde konaklama", housing: "Konaklama", variants: "prototip seçeneği", filters: "Filtreler", reset: "Sıfırla",
     sort: "Sıralama", sortDeal: "En iyi fırsatlar", sortCheap: "En düşük fiyat", sortRating: "En yüksek puan", type: "Konaklama türü", category: "Kategori", all: "Tümü",
     allTypes: "Tüm seçenekler", hotel: "Otel", apart: "Apart otel", villa: "Villa", area: "Oda büyüklüğü", anyArea: "Tüm büyüklükler", up20: "20 m²'ye kadar", from20: "20–30 m²", from30: "30–40 m²", over40: "40 m² üzeri",
@@ -648,6 +674,48 @@ function Stars({ count }: { count: number }) {
 function outboundUrl(stay: Stay, destination: string) {
   const place = destination === "Вся Турция" ? stay.city : destination;
   return `https://www.google.com/travel/search?q=${encodeURIComponent(`${stay.name} ${place} Turkey hotel`)}`;
+}
+
+function normalizeSearchToken(value: string) {
+  return value
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/ı/g, "i")
+    .replace(/[^a-z0-9а-яё]+/gi, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+const locationSearchTokens = new Set(Object.values(destinationSpeechAliases).flat()
+  .flatMap((item) => normalizeSearchToken(item).split(" "))
+  .filter(Boolean));
+
+function normalizeHotelSearchName(value: string) {
+  return normalizeSearchToken(value)
+    .replace(/\b(?:hotel|hotels|otel|отель|отели|the)\b/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function distinctiveHotelSearchTokens(query: string) {
+  const tokens = normalizeHotelSearchName(query).split(" ").filter((token) => token.length > 1);
+  const distinctive = tokens.filter((token) => !locationSearchTokens.has(token) && token !== "turkey" && token !== "turkiye");
+  return distinctive.length > 0 ? distinctive : tokens;
+}
+
+function hotelSearchScore(name: string, query: string) {
+  const normalizedQuery = normalizeHotelSearchName(query);
+  if (!normalizedQuery) return 0;
+  const normalizedName = normalizeHotelSearchName(name);
+  if (!normalizedName) return 0;
+  if (normalizedName === normalizedQuery) return 1000;
+  if (normalizedName.includes(normalizedQuery)) return 700 + normalizedQuery.length;
+  if (normalizedQuery.includes(normalizedName)) return 500 + normalizedName.length;
+  const queryTokens = distinctiveHotelSearchTokens(query);
+  const matchedTokens = queryTokens.filter((token) => normalizedName.includes(token));
+  if (matchedTokens.length === 0) return 0;
+  return Math.round((matchedTokens.length / queryTokens.length) * 300) + matchedTokens.join("").length;
 }
 
 function demoOffersForSearch({
@@ -782,11 +850,13 @@ export default function Home() {
       const mealOk = mealPlan === "any" || mealPlanOf(stay) === mealPlan;
       return cityOk && typeOk && stay.stars >= stars && stay.price / tripNights <= maxPrice && sizeOk && mealOk && stay.guests * rooms >= guests;
     });
-    if (sort === "Сначала дешевле") items = [...items].sort((a, b) => a.price - b.price);
-    if (sort === "По рейтингу") items = [...items].sort((a, b) => b.score - a.score);
-    if (sort === "Выгодные сначала") items = [...items].sort((a, b) => (b.oldPrice - b.price) / b.oldPrice - (a.oldPrice - a.price) / a.oldPrice);
+    const searchQuery = hotelName.trim();
+    const byHotelName = (a: Stay, b: Stay) => searchQuery ? hotelSearchScore(b.name, searchQuery) - hotelSearchScore(a.name, searchQuery) : 0;
+    if (sort === "Сначала дешевле") items = [...items].sort((a, b) => byHotelName(a, b) || a.price - b.price);
+    if (sort === "По рейтингу") items = [...items].sort((a, b) => byHotelName(a, b) || b.score - a.score);
+    if (sort === "Выгодные сначала") items = [...items].sort((a, b) => byHotelName(a, b) || (b.oldPrice - b.price) / b.oldPrice - (a.oldPrice - a.price) / a.oldPrice);
     return items;
-  }, [destination, guests, liveStays, maxPrice, mealPlan, rooms, selectedTypes, sizeRange, sort, stars, tripNights]);
+  }, [destination, guests, hotelName, liveStays, maxPrice, mealPlan, rooms, selectedTypes, sizeRange, sort, stars, tripNights]);
 
   async function runSearch(overrides: SearchOverrides = {}, append = false, cursor: SearchCursor | null = null) {
     const searchDestination = overrides.destination ?? destination;

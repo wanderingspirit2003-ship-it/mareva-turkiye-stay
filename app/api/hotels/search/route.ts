@@ -54,6 +54,12 @@ const turkeySearchScopes = [
 ] as const;
 
 const destinationQueries = Object.fromEntries(turkeySearchScopes) as Record<string, string>;
+const locationNameTokens = new Set(turkeySearchScopes.flatMap(([label, queryName]) => [
+  normalizeSearchToken(label),
+  normalizeSearchToken(queryName),
+  ...normalizeSearchToken(label).split(" "),
+  ...normalizeSearchToken(queryName).split(" "),
+]).filter(Boolean));
 
 function totalOf(value: { total_price?: SearchApiPrice; price_per_night?: SearchApiPrice }, nights: number) {
   const total = value.total_price?.extracted_price ?? value.total_price?.extracted_price_before_taxes;
@@ -101,6 +107,46 @@ function mergeProperties(...groups: SearchApiProperty[][]) {
     seen.add(key);
     return true;
   }));
+}
+
+function normalizeSearchToken(value: string) {
+  return value
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/ı/g, "i")
+    .replace(/[^a-z0-9а-яё]+/gi, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function normalizeHotelName(value: string) {
+  return normalizeSearchToken(value)
+    .replace(/\b(?:hotel|hotels|otel|отель|отели|the)\b/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function distinctiveHotelTokens(query: string) {
+  const tokens = normalizeHotelName(query).split(" ").filter((token) => token.length > 1);
+  const distinctive = tokens.filter((token) => !locationNameTokens.has(token) && token !== "turkey" && token !== "turkiye");
+  return distinctive.length > 0 ? distinctive : tokens;
+}
+
+function hotelNameScore(propertyName: string | undefined, query: string) {
+  const normalizedQuery = normalizeHotelName(query);
+  if (!normalizedQuery) return 0;
+  const normalizedName = normalizeHotelName(propertyName || "");
+  if (!normalizedName) return 0;
+  if (normalizedName === normalizedQuery) return 1000;
+  if (normalizedName.includes(normalizedQuery)) return 700 + normalizedQuery.length;
+  if (normalizedQuery.includes(normalizedName)) return 500 + normalizedName.length;
+  const queryTokens = distinctiveHotelTokens(query);
+  if (queryTokens.length === 0) return 0;
+  const matchedTokens = queryTokens.filter((token) => normalizedName.includes(token));
+  if (matchedTokens.length === 0) return 0;
+  const coverage = matchedTokens.length / queryTokens.length;
+  return Math.round(coverage * 300) + matchedTokens.join("").length;
 }
 
 export async function GET(request: Request) {
@@ -173,17 +219,25 @@ export async function GET(request: Request) {
       specialParams.set("special_offers", "true");
       specialSearch = await searchApiRequest(specialParams, apiKey).catch(() => null);
     }
+    const directProperties = generalSearch.property ? [generalSearch.property] : [];
     const mergedProperties = specialSearch
-      ? mergeProperties(specialSearch.properties || [], generalSearch.properties || [])
-      : generalSearch.properties || [];
+      ? mergeProperties(directProperties, specialSearch.properties || [], generalSearch.properties || [])
+      : mergeProperties(directProperties, generalSearch.properties || []);
     const searchableProperties = mergedProperties
       .filter((property) => property.property_token || property.link || property.name);
-    const properties = searchableProperties.slice(offset, offset + 18);
+    const rankedProperties = hotelName
+      ? [...searchableProperties].sort((a, b) => {
+        const scoreDelta = hotelNameScore(b.name, hotelName) - hotelNameScore(a.name, hotelName);
+        if (scoreDelta !== 0) return scoreDelta;
+        return discountOf(b.deal) - discountOf(a.deal);
+      })
+      : searchableProperties;
+    const properties = rankedProperties.slice(offset, offset + 18);
     const nextCursor = isWideTurkeySearch
       ? scopeIndex + 1 < scopes.length
         ? { scopeIndex: scopeIndex + 1, pageToken: "", offset: 0 }
         : null
-      : offset + properties.length < searchableProperties.length
+      : offset + properties.length < rankedProperties.length
         ? { scopeIndex, pageToken, offset: offset + properties.length }
         : generalSearch.pagination?.next_page_token
           ? { scopeIndex, pageToken: generalSearch.pagination.next_page_token, offset: 0 }
@@ -265,7 +319,10 @@ export async function GET(request: Request) {
         checkedAt,
         live: true,
       }];
-    }).sort((a, b) => (b.discount || 0) - (a.discount || 0) || a.price - b.price);
+    }).sort((a, b) => {
+      const scoreDelta = hotelName ? hotelNameScore(b.name, hotelName) - hotelNameScore(a.name, hotelName) : 0;
+      return scoreDelta || (b.discount || 0) - (a.discount || 0) || a.price - b.price;
+    });
 
     return Response.json({ offers, checkedAt, searched: properties.length, nextCursor, searchedScope: activeScope.label, source: "Google Hotels via SearchAPI.io" }, {
       headers: { "Cache-Control": "private, max-age=900" },
