@@ -324,7 +324,15 @@ const spokenDateNumbers: Record<string, number> = {
 };
 
 function normalizeSpeech(value: string) {
-  return value.toLowerCase().replace(/ё/g, "е").normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[.,;:!?]+/g, " ").replace(/\s+/g, " ").trim();
+  return value
+    .toLowerCase()
+    .replace(/ё/g, "е")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/(^|\s)(\d{1,2})\s*[-–—]?\s*(?:е|ое|го|ого|ый|ий|я)(?=\s|$|[.,;:!?])/g, "$1$2")
+    .replace(/[.,;:!?]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 function expandSpokenDateNumbers(normalized: string) {
@@ -371,13 +379,13 @@ function applyTokenizedDateRange(normalized: string, filters: AgentFilters) {
       return true;
     }
 
-    if (previousThirdDay && previousDay && /^(?:-|—|по|до|to)$/.test(previousSeparator || "")) {
+    if (previousThirdDay && previousDay && /^(?:-|—|по|до|to|и)$/.test(previousSeparator || "")) {
       filters.checkIn = isoDate(previousThirdDay, month);
       filters.checkOut = isoDate(previousDay, month);
       return true;
     }
 
-    if (previousDay && nextDay && (!nextSeparator || /^(?:-|—|по|до|to)$/.test(nextSeparator))) {
+    if (previousDay && nextDay && (!nextSeparator || /^(?:-|—|по|до|to|и)$/.test(nextSeparator))) {
       filters.checkIn = isoDate(previousDay, month);
       filters.checkOut = isoDate(nextDay, month);
       return true;
