@@ -275,6 +275,15 @@ function isoDate(day: number, month: string, year = 2026) {
   return `${year}-${month}-${String(day).padStart(2, "0")}`;
 }
 
+function parseSpokenQuantity(normalized: string, nouns: string) {
+  const digit = normalized.match(new RegExp(`(\\d{1,2})\\s*(?:${nouns})`));
+  if (digit) return Number(digit[1]);
+  for (const [word, value] of Object.entries(spokenNumbers)) {
+    if (new RegExp(`\\b${word}\\b\\s*(?:${nouns})`).test(normalized)) return value;
+  }
+  return undefined;
+}
+
 function parseLocalAgentFilters(message: string): AgentFilters {
   const normalized = normalizeSpeech(message);
   const filters: AgentFilters = {};
@@ -291,14 +300,10 @@ function parseLocalAgentFilters(message: string): AgentFilters {
   const starMatch = normalized.match(/([345])\s*(?:звезд|звезды|звездоч|star|yildiz|yıldız|★)/);
   if (starMatch) filters.stars = Number(starMatch[1]) as 3 | 4 | 5;
 
-  const digitGuests = normalized.match(/(\d{1,2})\s*(?:гост|человек|персон|guest|guests|person|kisi|kişi)/);
-  const wordGuests = Object.entries(spokenNumbers).find(([word]) => new RegExp(`\\b${word}\\b`).test(normalized) && /(гост|человек|персон|guest|person|kisi|kişi)/.test(normalized));
-  const guests = digitGuests ? Number(digitGuests[1]) : wordGuests?.[1];
+  const guests = parseSpokenQuantity(normalized, "гост|гостя|гостей|человек|персон|guest|guests|person|people|kisi|kişi");
   if (guests) filters.guests = Math.max(1, Math.min(10, guests));
 
-  const digitRooms = normalized.match(/(\d{1,2})\s*(?:номер|номера|номеров|room|rooms|oda)/);
-  const wordRooms = Object.entries(spokenNumbers).find(([word]) => new RegExp(`\\b${word}\\b`).test(normalized) && /(номер|номера|номеров|room|rooms|oda)/.test(normalized));
-  const rooms = digitRooms ? Number(digitRooms[1]) : wordRooms?.[1];
+  const rooms = parseSpokenQuantity(normalized, "номер|номера|номеров|room|rooms|oda");
   if (rooms) filters.rooms = Math.max(1, Math.min(8, rooms));
 
   const compactDate = normalized.match(/(?:с|from)?\s*(\d{1,2})[.\\/-](\d{1,2})(?:[.\\/-](202[67]))?\s*(?:-|—|по|до|to)\s*(\d{1,2})[.\\/-](\d{1,2})(?:[.\\/-](202[67]))?/);
@@ -311,6 +316,14 @@ function parseLocalAgentFilters(message: string): AgentFilters {
   }
 
   const monthPattern = Object.keys(monthNumbers).join("|");
+  const twoNamedDates = normalized.match(new RegExp(`(?:с|from)?\\s*(\\d{1,2})\\s*(${monthPattern})\\s*(?:-|—|по|до|to)\\s*(\\d{1,2})\\s*(${monthPattern})(?:\\s*(202[67]))?`));
+  if (twoNamedDates) {
+    const year = twoNamedDates[5] ? Number(twoNamedDates[5]) : 2026;
+    filters.checkIn = isoDate(Number(twoNamedDates[1]), monthNumbers[twoNamedDates[2]], year);
+    filters.checkOut = isoDate(Number(twoNamedDates[3]), monthNumbers[twoNamedDates[4]], year);
+    return filters;
+  }
+
   const namedDate = normalized.match(new RegExp(`(?:с|from)?\\s*(\\d{1,2})\\s*(?:-|—|по|до|to)\\s*(\\d{1,2})\\s*(${monthPattern})(?:\\s*(202[67]))?`));
   if (namedDate) {
     const year = namedDate[4] ? Number(namedDate[4]) : 2026;
@@ -784,7 +797,19 @@ export default function Home() {
     recognition.onresult = (event) => {
       const transcript = event.results[0]?.[0]?.transcript?.trim() || "";
       setAgentInput(transcript);
-      if (transcript) void sendAgentMessage(transcript, true);
+      if (transcript) {
+        const localFilters = parseLocalAgentFilters(transcript);
+        if (Object.keys(localFilters).length > 0) {
+          setAgentMessages((current) => [
+            ...current,
+            { id: crypto.randomUUID(), role: "user", text: transcript },
+            { id: crypto.randomUUID(), role: "assistant", text: localAgentFallbackReply(language), filters: localFilters },
+          ]);
+          applyAgentFilters(localFilters);
+        } else {
+          void sendAgentMessage(transcript, true);
+        }
+      }
     };
     recognition.onerror = () => setVoiceError(t.voiceUnavailable);
     recognition.onend = () => {
