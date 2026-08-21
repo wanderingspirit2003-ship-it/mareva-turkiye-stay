@@ -346,6 +346,46 @@ function parseSpokenQuantity(normalized: string, nouns: string) {
   return undefined;
 }
 
+function parseDayToken(value: string) {
+  if (!/^\d{1,2}$/.test(value)) return undefined;
+  const day = Number(value);
+  return day >= 1 && day <= 31 ? day : undefined;
+}
+
+function applyTokenizedDateRange(normalized: string, filters: AgentFilters) {
+  const tokens = normalized.split(/\s+/).filter(Boolean);
+  for (let index = 0; index < tokens.length; index += 1) {
+    const month = monthNumbers[tokens[index]];
+    if (!month) continue;
+
+    const previousDay = parseDayToken(tokens[index - 1] || "");
+    const previousPreviousDay = parseDayToken(tokens[index - 2] || "");
+    const previousThirdDay = parseDayToken(tokens[index - 3] || "");
+    const previousSeparator = tokens[index - 2];
+    const nextSeparator = tokens[index + 1];
+    const nextDay = parseDayToken(tokens[index + 2] || "") ?? parseDayToken(tokens[index + 1] || "");
+
+    if (previousPreviousDay && previousDay) {
+      filters.checkIn = isoDate(previousPreviousDay, month);
+      filters.checkOut = isoDate(previousDay, month);
+      return true;
+    }
+
+    if (previousThirdDay && previousDay && /^(?:-|—|по|до|to)$/.test(previousSeparator || "")) {
+      filters.checkIn = isoDate(previousThirdDay, month);
+      filters.checkOut = isoDate(previousDay, month);
+      return true;
+    }
+
+    if (previousDay && nextDay && (!nextSeparator || /^(?:-|—|по|до|to)$/.test(nextSeparator))) {
+      filters.checkIn = isoDate(previousDay, month);
+      filters.checkOut = isoDate(nextDay, month);
+      return true;
+    }
+  }
+  return false;
+}
+
 function parseLocalAgentFilters(message: string): AgentFilters {
   const normalized = expandSpokenDateNumbers(normalizeSpeech(message));
   const filters: AgentFilters = {};
@@ -379,6 +419,8 @@ function parseLocalAgentFilters(message: string): AgentFilters {
   }
 
   const monthPattern = Object.keys(monthNumbers).join("|");
+  if (applyTokenizedDateRange(normalized, filters)) return filters;
+
   const twoNamedDates = normalized.match(new RegExp(`(?:^|\\s)(?:с|from)?\\s*(\\d{1,2})(?!\\d)\\s*(${monthPattern})\\s*(?:-|—|по|до|to)\\s*(\\d{1,2})(?!\\d)\\s*(${monthPattern})(?:\\s*(202[67]))?`));
   if (twoNamedDates) {
     const year = twoNamedDates[5] ? Number(twoNamedDates[5]) : 2026;
@@ -403,14 +445,6 @@ function parseLocalAgentFilters(message: string): AgentFilters {
     filters.checkIn = isoDate(Number(namedDate[1]), month, year);
     filters.checkOut = isoDate(Number(namedDate[2]), month, year);
     return filters;
-  }
-
-  const looseNamedDate = normalized.match(new RegExp(`(?:^|\\s)(?:с|from)?\\s*(\\d{1,2})(?!\\d)(?:\\s*(?:-|—|по|до|to)\\s*|\\s+)(\\d{1,2})(?!\\d)\\s*(${monthPattern})(?:\\s*(202[67]))?`));
-  if (looseNamedDate) {
-    const year = looseNamedDate[4] ? Number(looseNamedDate[4]) : 2026;
-    const month = monthNumbers[looseNamedDate[3]];
-    filters.checkIn = isoDate(Number(looseNamedDate[1]), month, year);
-    filters.checkOut = isoDate(Number(looseNamedDate[2]), month, year);
   }
 
   return filters;

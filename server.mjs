@@ -2,7 +2,7 @@ import http from "node:http";
 import { spawn } from "node:child_process";
 
 const primaryPort = Number(process.env.PORT || 80);
-const fallbackPort = 3000;
+const fallbackPort = Number(process.env.FALLBACK_PORT || 0);
 const appPort = Number(process.env.VINEXT_PORT || 3001);
 const host = "0.0.0.0";
 let appStatus = "starting";
@@ -75,7 +75,7 @@ function handleRequest(request, response) {
   request.pipe(proxy);
 }
 
-const ports = [...new Set([primaryPort, fallbackPort])];
+const ports = [...new Set([primaryPort, fallbackPort].filter((port) => port > 0))];
 
 for (const port of ports) {
   const server = http.createServer(handleRequest);
