@@ -290,7 +290,7 @@ const spokenNumbers: Record<string, number> = {
 };
 
 function normalizeSpeech(value: string) {
-  return value.toLowerCase().replace(/ё/g, "е").normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  return value.toLowerCase().replace(/ё/g, "е").normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[.,;:!?]+/g, " ");
 }
 
 function isoDate(day: number, month: string, year = 2026) {
@@ -301,7 +301,7 @@ function parseSpokenQuantity(normalized: string, nouns: string) {
   const digit = normalized.match(new RegExp(`(\\d{1,2})\\s*(?:${nouns})`));
   if (digit) return Number(digit[1]);
   for (const [word, value] of Object.entries(spokenNumbers)) {
-    if (new RegExp(`\\b${word}\\b\\s*(?:${nouns})`).test(normalized)) return value;
+    if (new RegExp(`(?:^|\\s)${word}(?:\\s+)(?:${nouns})(?:\\s|$)`).test(normalized)) return value;
   }
   return undefined;
 }
@@ -339,6 +339,15 @@ function parseLocalAgentFilters(message: string): AgentFilters {
   }
 
   const monthPattern = Object.keys(monthNumbers).join("|");
+  const looseNamedDate = normalized.match(new RegExp(`(?:с|from)?\\s*(\\d{1,2})\\s*(?:-|—|по|до|to)?\\s*(\\d{1,2})\\s*(${monthPattern})(?:\\s*(202[67]))?`));
+  if (looseNamedDate) {
+    const year = looseNamedDate[4] ? Number(looseNamedDate[4]) : 2026;
+    const month = monthNumbers[looseNamedDate[3]];
+    filters.checkIn = isoDate(Number(looseNamedDate[1]), month, year);
+    filters.checkOut = isoDate(Number(looseNamedDate[2]), month, year);
+    return filters;
+  }
+
   const twoNamedDates = normalized.match(new RegExp(`(?:с|from)?\\s*(\\d{1,2})\\s*(${monthPattern})\\s*(?:-|—|по|до|to)\\s*(\\d{1,2})\\s*(${monthPattern})(?:\\s*(202[67]))?`));
   if (twoNamedDates) {
     const year = twoNamedDates[5] ? Number(twoNamedDates[5]) : 2026;
@@ -347,7 +356,7 @@ function parseLocalAgentFilters(message: string): AgentFilters {
     return filters;
   }
 
-  const startNamedEndDay = normalized.match(new RegExp(`(?:с|from)?\\s*(\\d{1,2})\\s*(${monthPattern})\\s*(?:-|—|по|до|to)\\s*(\\d{1,2})(?:\\s*(202[67]))?`));
+  const startNamedEndDay = normalized.match(new RegExp(`(?:с|from)?\\s*(\\d{1,2})\\s*(${monthPattern})\\s*(?:-|—|по|до|to)?\\s*(\\d{1,2})(?:\\s*(202[67]))?`));
   if (startNamedEndDay) {
     const year = startNamedEndDay[4] ? Number(startNamedEndDay[4]) : 2026;
     const month = monthNumbers[startNamedEndDay[2]];
@@ -801,6 +810,12 @@ export default function Home() {
     if (!message || agentLoading) return;
     setAgentInput("");
     setAgentMessages((current) => [...current, { id: crypto.randomUUID(), role: "user", text: message }]);
+    const localFilters = parseLocalAgentFilters(message);
+    if (Object.keys(localFilters).length > 0) {
+      setAgentMessages((current) => [...current, { id: crypto.randomUUID(), role: "assistant", text: localAgentFallbackReply(language), filters: localFilters }]);
+      if (autoApply) applyAgentFilters(localFilters);
+      return;
+    }
     setAgentLoading(true);
     try {
       const response = await fetch("/api/agent", {
@@ -817,13 +832,7 @@ export default function Home() {
       setAgentMessages((current) => [...current, { id: crypto.randomUUID(), role: "assistant", text: payload.reply || t.aiIntro, filters: payload.filters || {} }]);
       if (autoApply && payload.filters && Object.keys(payload.filters).length > 0) applyAgentFilters(payload.filters);
     } catch {
-      const fallbackFilters = parseLocalAgentFilters(message);
-      if (Object.keys(fallbackFilters).length > 0) {
-        setAgentMessages((current) => [...current, { id: crypto.randomUUID(), role: "assistant", text: localAgentFallbackReply(language), filters: fallbackFilters }]);
-        if (autoApply) applyAgentFilters(fallbackFilters);
-      } else {
-        setAgentMessages((current) => [...current, { id: crypto.randomUUID(), role: "assistant", text: t.aiError }]);
-      }
+      setAgentMessages((current) => [...current, { id: crypto.randomUUID(), role: "assistant", text: t.aiError }]);
     } finally {
       setAgentLoading(false);
     }
