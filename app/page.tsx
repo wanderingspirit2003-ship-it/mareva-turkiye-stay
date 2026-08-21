@@ -289,8 +289,48 @@ const spokenNumbers: Record<string, number> = {
   десять: 10, ten: 10, on: 10,
 };
 
+const spokenDateNumbers: Record<string, number> = {
+  "первого": 1, "первое": 1, "первый": 1,
+  "второго": 2, "второе": 2, "второй": 2,
+  "третьего": 3, "третье": 3, "третий": 3,
+  "четвертого": 4, "четвертое": 4, "четвертый": 4,
+  "пятого": 5, "пятое": 5, "пятый": 5,
+  "шестого": 6, "шестое": 6, "шестой": 6,
+  "седьмого": 7, "седьмое": 7, "седьмой": 7,
+  "восьмого": 8, "восьмое": 8, "восьмой": 8,
+  "девятого": 9, "девятое": 9, "девятый": 9,
+  "десятого": 10, "десятое": 10, "десятый": 10,
+  "одиннадцатого": 11, "одиннадцатое": 11, "одиннадцатый": 11,
+  "двенадцатого": 12, "двенадцатое": 12, "двенадцатый": 12,
+  "тринадцатого": 13, "тринадцатое": 13, "тринадцатый": 13,
+  "четырнадцатого": 14, "четырнадцатое": 14, "четырнадцатый": 14,
+  "пятнадцатого": 15, "пятнадцатое": 15, "пятнадцатый": 15,
+  "шестнадцатого": 16, "шестнадцатое": 16, "шестнадцатый": 16, "шестнадцать": 16,
+  "семнадцатого": 17, "семнадцатое": 17, "семнадцатый": 17, "семнадцать": 17,
+  "восемнадцатого": 18, "восемнадцатое": 18, "восемнадцатый": 18, "восемнадцать": 18,
+  "девятнадцатого": 19, "девятнадцатое": 19, "девятнадцатый": 19, "девятнадцать": 19,
+  "двадцатого": 20, "двадцатое": 20, "двадцатый": 20, "двадцать": 20,
+  "двадцать первого": 21, "двадцать первое": 21, "двадцать первый": 21, "двадцать один": 21,
+  "двадцать второго": 22, "двадцать второе": 22, "двадцать второй": 22, "двадцать два": 22,
+  "двадцать третьего": 23, "двадцать третье": 23, "двадцать третий": 23, "двадцать три": 23,
+  "двадцать четвертого": 24, "двадцать четвертое": 24, "двадцать четвертый": 24, "двадцать четыре": 24,
+  "двадцать пятого": 25, "двадцать пятое": 25, "двадцать пятый": 25, "двадцать пять": 25,
+  "двадцать шестого": 26, "двадцать шестое": 26, "двадцать шестой": 26, "двадцать шесть": 26,
+  "двадцать седьмого": 27, "двадцать седьмое": 27, "двадцать седьмой": 27, "двадцать семь": 27,
+  "двадцать восьмого": 28, "двадцать восьмое": 28, "двадцать восьмой": 28, "двадцать восемь": 28,
+  "двадцать девятого": 29, "двадцать девятое": 29, "двадцать девятый": 29, "двадцать девять": 29,
+  "тридцатого": 30, "тридцатое": 30, "тридцатый": 30, "тридцать": 30,
+  "тридцать первого": 31, "тридцать первое": 31, "тридцать первый": 31, "тридцать один": 31,
+};
+
 function normalizeSpeech(value: string) {
-  return value.toLowerCase().replace(/ё/g, "е").normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[.,;:!?]+/g, " ");
+  return value.toLowerCase().replace(/ё/g, "е").normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[.,;:!?]+/g, " ").replace(/\s+/g, " ").trim();
+}
+
+function expandSpokenDateNumbers(normalized: string) {
+  return Object.entries(spokenDateNumbers)
+    .sort((a, b) => b[0].length - a[0].length)
+    .reduce((text, [phrase, value]) => text.replace(new RegExp(`(?:^|\\s)${phrase}(?=\\s|$)`, "g"), (match) => `${match.startsWith(" ") ? " " : ""}${value}`), normalized);
 }
 
 function isoDate(day: number, month: string, year = 2026) {
@@ -307,7 +347,7 @@ function parseSpokenQuantity(normalized: string, nouns: string) {
 }
 
 function parseLocalAgentFilters(message: string): AgentFilters {
-  const normalized = normalizeSpeech(message);
+  const normalized = expandSpokenDateNumbers(normalizeSpeech(message));
   const filters: AgentFilters = {};
   const destination = destinations.find((item) =>
     destinationSpeechAliases[item]?.some((alias) => normalized.includes(normalizeSpeech(alias)))
@@ -339,15 +379,6 @@ function parseLocalAgentFilters(message: string): AgentFilters {
   }
 
   const monthPattern = Object.keys(monthNumbers).join("|");
-  const looseNamedDate = normalized.match(new RegExp(`(?:с|from)?\\s*(\\d{1,2})\\s*(?:-|—|по|до|to)?\\s*(\\d{1,2})\\s*(${monthPattern})(?:\\s*(202[67]))?`));
-  if (looseNamedDate) {
-    const year = looseNamedDate[4] ? Number(looseNamedDate[4]) : 2026;
-    const month = monthNumbers[looseNamedDate[3]];
-    filters.checkIn = isoDate(Number(looseNamedDate[1]), month, year);
-    filters.checkOut = isoDate(Number(looseNamedDate[2]), month, year);
-    return filters;
-  }
-
   const twoNamedDates = normalized.match(new RegExp(`(?:с|from)?\\s*(\\d{1,2})\\s*(${monthPattern})\\s*(?:-|—|по|до|to)\\s*(\\d{1,2})\\s*(${monthPattern})(?:\\s*(202[67]))?`));
   if (twoNamedDates) {
     const year = twoNamedDates[5] ? Number(twoNamedDates[5]) : 2026;
@@ -371,6 +402,15 @@ function parseLocalAgentFilters(message: string): AgentFilters {
     const month = monthNumbers[namedDate[3]];
     filters.checkIn = isoDate(Number(namedDate[1]), month, year);
     filters.checkOut = isoDate(Number(namedDate[2]), month, year);
+    return filters;
+  }
+
+  const looseNamedDate = normalized.match(new RegExp(`(?:с|from)?\\s*(\\d{1,2})\\s*(?:-|—|по|до|to|\\s)\\s*(\\d{1,2})\\s*(${monthPattern})(?:\\s*(202[67]))?`));
+  if (looseNamedDate) {
+    const year = looseNamedDate[4] ? Number(looseNamedDate[4]) : 2026;
+    const month = monthNumbers[looseNamedDate[3]];
+    filters.checkIn = isoDate(Number(looseNamedDate[1]), month, year);
+    filters.checkOut = isoDate(Number(looseNamedDate[2]), month, year);
   }
 
   return filters;
@@ -813,7 +853,7 @@ export default function Home() {
     const localFilters = parseLocalAgentFilters(message);
     if (Object.keys(localFilters).length > 0) {
       setAgentMessages((current) => [...current, { id: crypto.randomUUID(), role: "assistant", text: localAgentFallbackReply(language), filters: localFilters }]);
-      if (autoApply) applyAgentFilters(localFilters);
+      applyAgentFilters(localFilters);
       return;
     }
     setAgentLoading(true);
