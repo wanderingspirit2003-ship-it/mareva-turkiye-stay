@@ -207,6 +207,28 @@ const destinations = [
   "Олюдениз", "Каш", "Кушадасы", "Чешме", "Дидим", "Даламан", "Сарыгерме", "Измир", "Стамбул", "Каппадокия",
 ].filter((item) => item === "Вся Турция" || stays.some((stay) => stay.city === item));
 
+const destinationSpeechAliases: Record<string, string[]> = {
+  "Вся Турция": ["вся турция", "всю турцию", "всей турции", "по всей турции", "турция", "турции", "all turkey", "whole turkey", "tum turkiye", "tüm türkiye"],
+  "Анталья": ["анталья", "анталии", "анталию", "antalya"],
+  "Аланья": ["аланья", "алании", "аланию", "alanya"],
+  "Белек": ["белек", "белеке", "belek"],
+  "Сиде": ["сиде", "side"],
+  "Кемер": ["кемер", "кемере", "kemer"],
+  "Бодрум": ["бодрум", "бодруме", "bodrum"],
+  "Мармарис": ["мармарис", "мармарисе", "marmaris"],
+  "Фетхие": ["фетхие", "fethiye"],
+  "Олюдениз": ["олюдениз", "oludeniz", "oludenız"],
+  "Каш": ["каш", "kas", "kaş"],
+  "Кушадасы": ["кушадасы", "kusadasi", "kuşadası"],
+  "Чешме": ["чешме", "cesme", "çeşme"],
+  "Дидим": ["дидим", "didim"],
+  "Даламан": ["даламан", "dalaman"],
+  "Сарыгерме": ["сарыгерме", "sarigerme", "sarıgerme"],
+  "Измир": ["измир", "измире", "izmir"],
+  "Стамбул": ["стамбул", "стамбуле", "istanbul"],
+  "Каппадокия": ["каппадокия", "каппадокии", "каппадокию", "cappadocia", "kapadokya"],
+};
+
 type Language = "ru" | "en" | "tr";
 type HistoryItem = { id: number | string; kind: "search" | "booking"; destination: string; dates: string; guests: number };
 type AgentFilters = {
@@ -287,14 +309,15 @@ function parseSpokenQuantity(normalized: string, nouns: string) {
 function parseLocalAgentFilters(message: string): AgentFilters {
   const normalized = normalizeSpeech(message);
   const filters: AgentFilters = {};
-  const destination = destinations.find((item) => item !== "Вся Турция" && normalized.includes(normalizeSpeech(item)));
+  const destination = destinations.find((item) =>
+    destinationSpeechAliases[item]?.some((alias) => normalized.includes(normalizeSpeech(alias)))
+  );
   if (destination) filters.destination = destination;
-  else if (/(вся|всю|all|whole).{0,12}(турц|turkey|turkiye)/.test(normalized)) filters.destination = "Вся Турция";
 
   const propertyTypes: PropertyType[] = [];
-  if (/\b(отел|hotel|otel)\b/.test(normalized)) propertyTypes.push("Отель");
+  if (/(?:^|\s)(отел|отель|отели|отеля|отеле|hotel|hotels|otel)(?:\s|$)/.test(normalized)) propertyTypes.push("Отель");
   if (/(апарт|apart)/.test(normalized)) propertyTypes.push("Апарт-отель");
-  if (/\b(вилла|villa|виллу|виллы)\b/.test(normalized)) propertyTypes.push("Вилла");
+  if (/(?:^|\s)(вилла|виллу|виллы|вилле|villa|villas)(?:\s|$)/.test(normalized)) propertyTypes.push("Вилла");
   if (propertyTypes.length > 0) filters.propertyTypes = propertyTypes;
 
   const starMatch = normalized.match(/([345])\s*(?:звезд|звезды|звездоч|star|yildiz|yıldız|★)/);
@@ -339,6 +362,12 @@ function localAgentFallbackReply(language: Language) {
   if (language === "en") return "AI is temporarily unavailable, but I recognized the main search conditions locally.";
   if (language === "tr") return "AI geçici olarak kullanılamıyor, ancak temel arama koşullarını yerel olarak tanıdım.";
   return "AI временно недоступен, но я распознал основные условия поиска локально.";
+}
+
+function localVoiceMissReply(language: Language) {
+  if (language === "en") return "I recognized the voice, but could not identify search conditions. Try saying: Bodrum from 16 to 27 September, two guests, two rooms.";
+  if (language === "tr") return "Sesi aldım, ancak arama koşullarını çıkaramadım. Şöyle söylemeyi deneyin: Bodrum, 16-27 Eylül, iki misafir, iki oda.";
+  return "Голос распознал, но условия поиска не понял. Попробуйте сказать: Бодрум с 16 по 27 сентября, два гостя, два номера.";
 }
 
 function guestLabel(count: number, language: Language) {
@@ -813,7 +842,11 @@ export default function Home() {
           ]);
           applyAgentFilters(localFilters);
         } else {
-          void sendAgentMessage(transcript, true);
+          setAgentMessages((current) => [
+            ...current,
+            { id: crypto.randomUUID(), role: "user", text: transcript },
+            { id: crypto.randomUUID(), role: "assistant", text: localVoiceMissReply(language) },
+          ]);
         }
       }
     };
