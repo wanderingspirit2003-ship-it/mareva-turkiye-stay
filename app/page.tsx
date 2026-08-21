@@ -347,6 +347,15 @@ function parseLocalAgentFilters(message: string): AgentFilters {
     return filters;
   }
 
+  const startNamedEndDay = normalized.match(new RegExp(`(?:с|from)?\\s*(\\d{1,2})\\s*(${monthPattern})\\s*(?:-|—|по|до|to)\\s*(\\d{1,2})(?:\\s*(202[67]))?`));
+  if (startNamedEndDay) {
+    const year = startNamedEndDay[4] ? Number(startNamedEndDay[4]) : 2026;
+    const month = monthNumbers[startNamedEndDay[2]];
+    filters.checkIn = isoDate(Number(startNamedEndDay[1]), month, year);
+    filters.checkOut = isoDate(Number(startNamedEndDay[3]), month, year);
+    return filters;
+  }
+
   const namedDate = normalized.match(new RegExp(`(?:с|from)?\\s*(\\d{1,2})\\s*(?:-|—|по|до|to)\\s*(\\d{1,2})\\s*(${monthPattern})(?:\\s*(202[67]))?`));
   if (namedDate) {
     const year = namedDate[4] ? Number(namedDate[4]) : 2026;
@@ -380,6 +389,26 @@ function roomLabel(count: number, language: Language) {
   if (language === "tr") return "oda";
   if (language === "en") return count === 1 ? "room" : "rooms";
   return count === 1 ? "номер" : count < 5 ? "номера" : "номеров";
+}
+
+function dayLabel(count: number, language: Language) {
+  if (language === "tr") return "gün";
+  if (language === "en") return count === 1 ? "day" : "days";
+  const last = count % 10;
+  const lastTwo = count % 100;
+  if (last === 1 && lastTwo !== 11) return "день";
+  if (last >= 2 && last <= 4 && (lastTwo < 12 || lastTwo > 14)) return "дня";
+  return "дней";
+}
+
+function nightLabel(count: number, language: Language) {
+  if (language === "tr") return "gece";
+  if (language === "en") return count === 1 ? "night" : "nights";
+  const last = count % 10;
+  const lastTwo = count % 100;
+  if (last === 1 && lastTwo !== 11) return "ночь";
+  if (last >= 2 && last <= 4 && (lastTwo < 12 || lastTwo > 14)) return "ночи";
+  return "ночей";
 }
 
 const destinationNames: Record<Language, Record<string, string>> = {
@@ -615,6 +644,8 @@ export default function Home() {
     const value = Math.round((parseIso(checkOut).getTime() - parseIso(checkIn).getTime()) / 86400000);
     return Math.max(1, value);
   }, [checkIn, checkOut]);
+  const tripDays = tripNights + 1;
+  const tripDuration = `${tripDays} ${dayLabel(tripDays, language)} / ${tripNights} ${nightLabel(tripNights, language)}`;
 
   useEffect(() => {
     const storedHistory = window.localStorage.getItem("mareva-history");
@@ -1017,6 +1048,7 @@ export default function Home() {
               <strong>{destinationNames[language][destination] || destination}</strong>
               {hotelName && <span>{hotelName}</span>}
               <span>{displayDate(checkIn)} — {displayDate(checkOut)}</span>
+              <span>{tripDuration}</span>
               <span>{guests} · {t.guests.toLocaleLowerCase()} · {rooms} · {t.rooms.toLocaleLowerCase()}</span>
             </div>
             <div className="search-loading-progress" aria-hidden="true"><i /></div>
@@ -1153,7 +1185,7 @@ export default function Home() {
           <div>
             <span className="section-kicker">{t.picked}</span>
             <h2>{destination === "Вся Турция" ? t.allTurkey : `${t.housing}: ${destinationNames[language][destination]}`}</h2>
-            <p>{filtered.length} {t.variants} · {checkIn && checkOut ? `${checkIn.split("-").reverse().join(".")} — ${checkOut.split("-").reverse().join(".")}` : t.selectDates}</p>
+            <p>{filtered.length} {t.variants} · {checkIn && checkOut ? `${checkIn.split("-").reverse().join(".")} — ${checkOut.split("-").reverse().join(".")} · ${tripDuration}` : t.selectDates}</p>
           </div>
           <div className="heading-actions">
             <button className="filter-mobile" onClick={() => setFiltersOpen(!filtersOpen)}>{t.filters}</button>
