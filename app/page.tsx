@@ -379,7 +379,7 @@ function parseLocalAgentFilters(message: string): AgentFilters {
   }
 
   const monthPattern = Object.keys(monthNumbers).join("|");
-  const twoNamedDates = normalized.match(new RegExp(`(?:с|from)?\\s*(\\d{1,2})\\s*(${monthPattern})\\s*(?:-|—|по|до|to)\\s*(\\d{1,2})\\s*(${monthPattern})(?:\\s*(202[67]))?`));
+  const twoNamedDates = normalized.match(new RegExp(`(?:^|\\s)(?:с|from)?\\s*(\\d{1,2})(?!\\d)\\s*(${monthPattern})\\s*(?:-|—|по|до|to)\\s*(\\d{1,2})(?!\\d)\\s*(${monthPattern})(?:\\s*(202[67]))?`));
   if (twoNamedDates) {
     const year = twoNamedDates[5] ? Number(twoNamedDates[5]) : 2026;
     filters.checkIn = isoDate(Number(twoNamedDates[1]), monthNumbers[twoNamedDates[2]], year);
@@ -387,7 +387,7 @@ function parseLocalAgentFilters(message: string): AgentFilters {
     return filters;
   }
 
-  const startNamedEndDay = normalized.match(new RegExp(`(?:с|from)?\\s*(\\d{1,2})\\s*(${monthPattern})\\s*(?:-|—|по|до|to)?\\s*(\\d{1,2})(?:\\s*(202[67]))?`));
+  const startNamedEndDay = normalized.match(new RegExp(`(?:^|\\s)(?:с|from)?\\s*(\\d{1,2})(?!\\d)\\s*(${monthPattern})\\s*(?:-|—|по|до|to)?\\s*(\\d{1,2})(?!\\d)(?:\\s*(202[67]))?`));
   if (startNamedEndDay) {
     const year = startNamedEndDay[4] ? Number(startNamedEndDay[4]) : 2026;
     const month = monthNumbers[startNamedEndDay[2]];
@@ -396,7 +396,7 @@ function parseLocalAgentFilters(message: string): AgentFilters {
     return filters;
   }
 
-  const namedDate = normalized.match(new RegExp(`(?:с|from)?\\s*(\\d{1,2})\\s*(?:-|—|по|до|to)\\s*(\\d{1,2})\\s*(${monthPattern})(?:\\s*(202[67]))?`));
+  const namedDate = normalized.match(new RegExp(`(?:^|\\s)(?:с|from)?\\s*(\\d{1,2})(?!\\d)\\s*(?:-|—|по|до|to)\\s*(\\d{1,2})(?!\\d)\\s*(${monthPattern})(?:\\s*(202[67]))?`));
   if (namedDate) {
     const year = namedDate[4] ? Number(namedDate[4]) : 2026;
     const month = monthNumbers[namedDate[3]];
@@ -405,7 +405,7 @@ function parseLocalAgentFilters(message: string): AgentFilters {
     return filters;
   }
 
-  const looseNamedDate = normalized.match(new RegExp(`(?:с|from)?\\s*(\\d{1,2})\\s*(?:-|—|по|до|to|\\s)\\s*(\\d{1,2})\\s*(${monthPattern})(?:\\s*(202[67]))?`));
+  const looseNamedDate = normalized.match(new RegExp(`(?:^|\\s)(?:с|from)?\\s*(\\d{1,2})(?!\\d)(?:\\s*(?:-|—|по|до|to)\\s*|\\s+)(\\d{1,2})(?!\\d)\\s*(${monthPattern})(?:\\s*(202[67]))?`));
   if (looseNamedDate) {
     const year = looseNamedDate[4] ? Number(looseNamedDate[4]) : 2026;
     const month = monthNumbers[looseNamedDate[3]];
