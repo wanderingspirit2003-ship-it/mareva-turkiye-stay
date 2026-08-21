@@ -978,6 +978,14 @@ export default function Home() {
           ) : (
             <div className="auth-actions"><button type="button" onClick={() => setAuthMode("login")}>{t.login}</button><button className="register-button" type="button" onClick={() => setAuthMode("register")}>{t.register}</button></div>
           )}
+          <a className="crowns-partner" href="https://the-crowns-alexstone.ru/" aria-label="Партнёры: The Crowns">
+            <img src="/the-crowns-icon.png" alt="" aria-hidden="true" />
+            <span>
+              <small>Партнёры</small>
+              <em>The</em>
+              <strong>Crowns</strong>
+            </span>
+          </a>
         </div>
       </header>
 

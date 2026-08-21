@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Manrope, Playfair_Display } from "next/font/google";
+import { Manrope, Playfair_Display, Rubik_Distressed } from "next/font/google";
 import { headers } from "next/headers";
 import "./globals.css";
 
@@ -12,6 +12,12 @@ const playfair = Playfair_Display({
   variable: "--font-display",
   subsets: ["cyrillic", "latin"],
   style: ["normal", "italic"],
+});
+
+const crowns = Rubik_Distressed({
+  variable: "--font-crowns",
+  subsets: ["latin"],
+  weight: "400",
 });
 
 export async function generateMetadata(): Promise<Metadata> {
@@ -57,7 +63,7 @@ export async function generateMetadata(): Promise<Metadata> {
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="ru">
-      <body className={`${manrope.variable} ${playfair.variable}`}>{children}</body>
+      <body className={`${manrope.variable} ${playfair.variable} ${crowns.variable}`}>{children}</body>
     </html>
   );
 }
