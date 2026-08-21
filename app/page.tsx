@@ -1141,7 +1141,7 @@ export default function Home() {
       <header className="site-header">
         <a className="brand" href="#top" aria-label="Mareva — на главную">
           <img className="brand-icon" src="/favicon.png" alt="" />
-          <span>mareva</span>
+          <span>Mareva</span>
         </a>
         <nav aria-label="Главное меню">
           <a href="#results">{t.findStay}</a>
@@ -1404,7 +1404,7 @@ export default function Home() {
       </section>
 
       <footer>
-        <a className="brand footer-brand" href="#top"><img className="brand-icon" src="/favicon.png" alt="" /><span>mareva</span></a>
+        <a className="brand footer-brand" href="#top"><img className="brand-icon" src="/favicon.png" alt="" /><span>Mareva</span></a>
         <p>{t.footerText}</p>
         <div><a href="#how">{t.howSearch}</a><a href="#results">{t.catalog}</a><span>{language.toUpperCase()} · EUR</span></div>
       </footer>

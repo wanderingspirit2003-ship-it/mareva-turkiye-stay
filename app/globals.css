@@ -526,27 +526,29 @@ footer > div { justify-self: end; display: flex; gap: 22px; font-size: 10px; col
 }
 
 @media (max-width: 680px) {
-  .site-header { height: 66px; padding: 0 14px; grid-template-columns: auto 1fr; column-gap: 8px; }
-  .brand { gap: 7px; font-size: 17px; letter-spacing: -.55px; }
+  .site-header { height: 66px; padding: 0 10px; grid-template-columns: auto minmax(0, 1fr); column-gap: 6px; }
+  .brand { flex: 0 0 auto; gap: 6px; font-size: 16px; letter-spacing: -.45px; white-space: nowrap; }
   .brand-icon { width: 34px; height: 34px; }
   .brand > span:last-child { display: inline; }
-  .header-actions { gap: 6px; padding-right: 0; }
+  .header-actions { min-width: 0; justify-content: flex-end; gap: 4px; padding-right: 0; }
+  .language-switch { padding: 2px; }
+  .language-switch button { width: 24px; height: 24px; font-size: 8px; }
   .crowns-partner {
-    grid-template-columns: 40px 42px;
-    gap: 4px;
+    grid-template-columns: 34px 38px;
+    gap: 3px;
     min-height: 38px;
-    padding: 0 6px 0 0;
+    padding: 0 4px 0 0;
     border-radius: 8px;
   }
-  .crowns-partner img { width: 40px; height: 100%; min-height: 38px; border-radius: 7px 0 0 7px; }
-  .crowns-partner span { min-width: 40px; }
-  .crowns-partner small { font-size: 7px; letter-spacing: .05em; }
-  .crowns-partner em { font-size: 8px; }
-  .crowns-partner strong { font-size: 10px; }
+  .crowns-partner img { width: 34px; height: 100%; min-height: 38px; border-radius: 7px 0 0 7px; }
+  .crowns-partner span { min-width: 36px; }
+  .crowns-partner small { font-size: 6px; letter-spacing: .04em; }
+  .crowns-partner em { font-size: 7px; }
+  .crowns-partner strong { font-size: 9px; }
   .auth-actions button:first-child { display: none; }
-  .auth-actions .register-button { padding: 8px 10px; }
+  .auth-actions .register-button { padding: 7px 8px; font-size: 10px; }
   .account-button { padding: 6px 8px; }
-  .footer-brand { gap: 8px; font-size: 18px; }
+  .footer-brand { display: inline-flex; gap: 8px; font-size: 18px; width: fit-content; }
   .footer-brand .brand-icon { width: 34px; height: 34px; }
   .hero { padding: 47px 20px 40px; min-height: auto; }
   .hero h1 { font-size: 55px; letter-spacing: -2.5px; }
