@@ -668,7 +668,10 @@ export default function Home() {
       if (cursor?.pageToken) params.set("pageToken", cursor.pageToken);
       if (cursor?.offset) params.set("offset", String(cursor.offset));
       if (cursor?.scopeIndex) params.set("scopeIndex", String(cursor.scopeIndex));
-      const response = await fetch(`/api/hotels/search?${params.toString()}`);
+      const controller = new AbortController();
+      const timeout = window.setTimeout(() => controller.abort(), 22000);
+      const response = await fetch(`/api/hotels/search?${params.toString()}`, { signal: controller.signal })
+        .finally(() => window.clearTimeout(timeout));
       const payload = await response.json() as { offers?: Stay[]; nextCursor?: SearchCursor | null; error?: string; message?: string };
       if (!response.ok) throw new Error(payload.error === "SOURCE_NOT_CONFIGURED" ? t.sourceMissing : payload.message || t.noMatches);
       const incoming = payload.offers || [];
@@ -716,7 +719,10 @@ export default function Home() {
         });
         setLiveStays(fallbackOffers);
         setSearchCursor(null);
-        setSearchError(fallbackOffers.length > 0 ? "" : error instanceof Error ? error.message : t.noMatches);
+        const message = error instanceof Error && error.name === "AbortError"
+          ? "Поиск занял слишком много времени. Попробуйте ещё раз или уточните направление."
+          : error instanceof Error ? error.message : t.noMatches;
+        setSearchError(fallbackOffers.length > 0 ? "" : message);
       }
       setSearched(true);
       if (append) setSearchError(error instanceof Error ? error.message : t.noMatches);
