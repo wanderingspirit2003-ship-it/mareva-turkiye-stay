@@ -25,8 +25,12 @@ ENV VINEXT_PORT=3001
 
 COPY --from=build /app ./
 
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends curl ca-certificates \
+  && rm -rf /var/lib/apt/lists/*
+
 EXPOSE 80
 
-HEALTHCHECK --interval=10s --timeout=5s --start-period=5s --retries=12 CMD node -e "fetch('http://127.0.0.1/health').then((res) => process.exit(res.ok ? 0 : 1)).catch(() => process.exit(1))"
+HEALTHCHECK --interval=10s --timeout=5s --start-period=5s --retries=12 CMD curl -fsS http://127.0.0.1/health || exit 1
 
 CMD ["node", "server.mjs"]
